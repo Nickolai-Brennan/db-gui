@@ -1,11 +1,11 @@
-import { pool } from './db';
+import { getPool } from './db';
 import type { QueryResult, QueryResultRow } from 'pg';
 
 export async function query<T extends QueryResultRow = any>(
   text: string,
   params?: any[]
 ): Promise<T[]> {
-  const result: QueryResult<T> = await pool.query(text, params);
+  const result: QueryResult<T> = await getPool().query(text, params);
   return result.rows;
 }
 

@@ -13,7 +13,7 @@ export type PgTable = {
   schema: string;
   name: string;
   oid: number;
-  kind: 'table' | 'partitioned_table';
+  kind: "table" | "partitioned_table";
   rowEstimate: number | null;
   totalBytes: number | null;
   tableBytes: number | null;

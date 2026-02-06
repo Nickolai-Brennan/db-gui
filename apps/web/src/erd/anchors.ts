@@ -1,4 +1,4 @@
-import type { Rect } from '../stores/erdStore';
+import type { Rect } from "../stores/erdStore";
 
 export function centerLeft(r: Rect) {
   return { x: r.x, y: r.y + r.h / 2 };

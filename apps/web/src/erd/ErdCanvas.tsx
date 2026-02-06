@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useErdStore } from '../stores/erdStore';
-import type { Edge, TableNode } from './graph';
-import { bezierPath, centerLeft, centerRight } from './anchors';
-import { TableNodeCard } from './TableNode';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useErdStore } from "../stores/erdStore";
+import type { Edge, TableNode } from "./graph";
+import { bezierPath, centerLeft, centerRight } from "./anchors";
+import { TableNodeCard } from "./TableNode";
 
 export function ErdCanvas({ nodes, edges }: { nodes: TableNode[]; edges: Edge[] }) {
   const viewport = useErdStore((s) => s.viewport);
@@ -16,7 +16,12 @@ export function ErdCanvas({ nodes, edges }: { nodes: TableNode[]; edges: Edge[] 
   const focusOn = useErdStore((s) => s.focusOn);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const [panning, setPanning] = useState<{ startX: number; startY: number; startVpX: number; startVpY: number } | null>(null);
+  const [panning, setPanning] = useState<{
+    startX: number;
+    startY: number;
+    startVpX: number;
+    startVpY: number;
+  } | null>(null);
 
   useEffect(() => {
     ensureLayout(nodes.map((n) => n.key));
@@ -25,7 +30,7 @@ export function ErdCanvas({ nodes, edges }: { nodes: TableNode[]; edges: Edge[] 
   // Focus handling: center viewport on table
   useEffect(() => {
     if (!focusTarget) return;
-    if (focusTarget.type === 'table') {
+    if (focusTarget.type === "table") {
       const r = layout[focusTarget.key];
       if (r) {
         const cx = r.x + r.w / 2;
@@ -34,7 +39,7 @@ export function ErdCanvas({ nodes, edges }: { nodes: TableNode[]; edges: Edge[] 
         const vw = stageRef.current?.clientWidth ?? 1200;
         const vh = stageRef.current?.clientHeight ?? 800;
         setViewport({ x: vw / 2 - cx * viewport.zoom, y: vh / 2 - cy * viewport.zoom });
-        setSelected({ type: 'table', key: focusTarget.key });
+        setSelected({ type: "table", key: focusTarget.key });
       }
     }
     focusOn(null);
@@ -64,7 +69,12 @@ export function ErdCanvas({ nodes, edges }: { nodes: TableNode[]; edges: Edge[] 
     // only pan if click background (not node)
     e.preventDefault();
     setSelected({ type: null });
-    setPanning({ startX: e.clientX, startY: e.clientY, startVpX: viewport.x, startVpY: viewport.y });
+    setPanning({
+      startX: e.clientX,
+      startY: e.clientY,
+      startVpX: viewport.x,
+      startVpY: viewport.y,
+    });
   };
 
   useEffect(() => {
@@ -77,11 +87,11 @@ export function ErdCanvas({ nodes, edges }: { nodes: TableNode[]; edges: Edge[] 
     };
     const up = () => setPanning(null);
 
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
     return () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
     };
   }, [panning, setViewport]);
 
@@ -102,10 +112,10 @@ export function ErdCanvas({ nodes, edges }: { nodes: TableNode[]; edges: Edge[] 
 
   const stageStyle: React.CSSProperties = {
     transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
-    transformOrigin: '0 0',
+    transformOrigin: "0 0",
     width: 6000,
     height: 6000,
-    position: 'relative',
+    position: "relative",
   };
 
   return (
@@ -128,8 +138,8 @@ export function ErdCanvas({ nodes, edges }: { nodes: TableNode[]; edges: Edge[] 
         className="absolute inset-0"
         style={{
           backgroundImage:
-            'linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
+            "linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px)",
+          backgroundSize: "40px 40px",
         }}
       />
 
@@ -144,11 +154,11 @@ export function ErdCanvas({ nodes, edges }: { nodes: TableNode[]; edges: Edge[] 
           <svg
             width={6000}
             height={6000}
-            style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }}
+            style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
           >
             {edgePaths.map((p) => {
-              const isSel = selected.type === 'relationship' && selected.key === p.key;
-              const stroke = isSel ? 'black' : 'rgba(0,0,0,0.25)';
+              const isSel = selected.type === "relationship" && selected.key === p.key;
+              const stroke = isSel ? "black" : "rgba(0,0,0,0.25)";
               const strokeWidth = isSel ? 2.5 : p.severity ? 2 : 1.25;
               return (
                 <path key={p.key} d={p.d} fill="none" stroke={stroke} strokeWidth={strokeWidth} />
