@@ -3,8 +3,27 @@ import { useErdStore } from "../stores/erdStore";
 import type { ErdEdge, ErdNode } from "./graph";
 import { bezierPath, centerLeft, centerRight } from "./anchors";
 import { TableNodeCard } from "./TableNode";
+import { SchemaLanes } from "./SchemaLanes";
+import { Minimap } from "./Minimap";
+import { computeSchemaLanes } from "./lanes";
 
-export function ErdCanvas({ nodes, edges }: { nodes: ErdNode[]; edges: ErdEdge[] }) {
+type ErdCanvasProps = {
+  nodes: ErdNode[];
+  edges: ErdEdge[];
+  dimmed: Set<string>;
+  showSchemaLanes: boolean;
+  showMinimap: boolean;
+  schemaByKey: Record<string, string>;
+};
+
+export function ErdCanvas({
+  nodes,
+  edges,
+  dimmed,
+  showSchemaLanes,
+  showMinimap,
+  schemaByKey,
+}: ErdCanvasProps) {
   const viewport = useErdStore((s) => s.viewport);
   const setViewport = useErdStore((s) => s.setViewport);
   const resetViewport = useErdStore((s) => s.resetViewport);
@@ -22,6 +41,7 @@ export function ErdCanvas({ nodes, edges }: { nodes: ErdNode[]; edges: ErdEdge[]
     startVpX: number;
     startVpY: number;
   } | null>(null);
+  const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
 
   useEffect(() => {
     ensureLayout(nodes.map((n) => n.key));
@@ -96,7 +116,7 @@ export function ErdCanvas({ nodes, edges }: { nodes: ErdNode[]; edges: ErdEdge[]
   }, [panning, setViewport]);
 
   const edgePaths = useMemo(() => {
-    const paths: { key: string; d: string; severity?: string }[] = [];
+    const paths: { key: string; d: string; severity?: string; edge: ErdEdge }[] = [];
     for (const e of edges) {
       const child = layout[e.childKey];
       const parent = layout[e.parentKey];
@@ -105,10 +125,20 @@ export function ErdCanvas({ nodes, edges }: { nodes: ErdNode[]; edges: ErdEdge[]
       const a = centerRight(child);
       const b = centerLeft(parent);
 
-      paths.push({ key: e.key, d: bezierPath(a, b), severity: e.severity });
+      paths.push({ key: e.key, d: bezierPath(a, b), severity: e.severity, edge: e });
     }
     return paths;
   }, [edges, layout]);
+
+  // Compute schema lanes
+  const lanes = useMemo(() => {
+    if (!showSchemaLanes) return [];
+    return computeSchemaLanes(
+      nodes.map((n) => n.key),
+      schemaByKey,
+      layout
+    );
+  }, [showSchemaLanes, nodes, schemaByKey, layout]);
 
   const stageStyle: React.CSSProperties = {
     transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
@@ -133,6 +163,13 @@ export function ErdCanvas({ nodes, edges }: { nodes: ErdNode[]; edges: ErdEdge[]
         </div>
       </div>
 
+      {/* Minimap */}
+      {showMinimap && (
+        <Minimap
+          tableKeys={nodes.map((n) => n.key)}
+        />
+      )}
+
       {/* subtle grid background */}
       <div
         className="absolute inset-0"
@@ -150,25 +187,61 @@ export function ErdCanvas({ nodes, edges }: { nodes: ErdNode[]; edges: ErdEdge[]
         onPointerDown={onPointerDownBg}
       >
         <div style={stageStyle}>
+          {/* Schema lanes */}
+          {showSchemaLanes && lanes.length > 0 && <SchemaLanes lanes={lanes} />}
+
           {/* Edges layer */}
           <svg
             width={6000}
             height={6000}
-            style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
+            style={{ position: "absolute", left: 0, top: 0, pointerEvents: "auto" }}
           >
             {edgePaths.map((p) => {
               const isSel = selected.type === "relationship" && selected.key === p.key;
-              const stroke = isSel ? "black" : "rgba(0,0,0,0.25)";
-              const strokeWidth = isSel ? 2.5 : p.severity ? 2 : 1.25;
+              const isHovered = hoveredEdge === p.key;
+              const stroke = isSel
+                ? "black"
+                : p.severity
+                  ? "rgba(220, 38, 38, 0.6)"
+                  : "rgba(0,0,0,0.25)";
+              const strokeWidth = isSel ? 2.5 : p.severity || isHovered ? 2 : 1.25;
               return (
-                <path key={p.key} d={p.d} fill="none" stroke={stroke} strokeWidth={strokeWidth} />
+                <g key={p.key}>
+                  <path
+                    d={p.d}
+                    fill="none"
+                    stroke={stroke}
+                    strokeWidth={strokeWidth}
+                    style={{ cursor: "pointer" }}
+                    onMouseEnter={() => setHoveredEdge(p.key)}
+                    onMouseLeave={() => setHoveredEdge(null)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelected({ type: "relationship", key: p.key });
+                    }}
+                  />
+                  {/* Wider invisible path for easier hovering */}
+                  <path
+                    d={p.d}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={12}
+                    style={{ cursor: "pointer" }}
+                    onMouseEnter={() => setHoveredEdge(p.key)}
+                    onMouseLeave={() => setHoveredEdge(null)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelected({ type: "relationship", key: p.key });
+                    }}
+                  />
+                </g>
               );
             })}
           </svg>
 
           {/* Nodes layer */}
           {nodes.map((n) => (
-            <TableNodeCard key={n.key} node={n} />
+            <TableNodeCard key={n.key} node={n} dim={dimmed.has(n.key)} />
           ))}
         </div>
       </div>

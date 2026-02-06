@@ -10,7 +10,7 @@ function severityLabel(sev?: string) {
   return sev.toUpperCase();
 }
 
-export function TableNodeCard({ node }: { node: ErdNode }) {
+export function TableNodeCard({ node, dim }: { node: ErdNode; dim?: boolean }) {
   const layout = useErdStore((s) => s.layout[node.key]);
   const setRect = useErdStore((s) => s.setTableRect);
   const selected = useErdStore((s) => s.selected);
@@ -67,6 +67,7 @@ export function TableNodeCard({ node }: { node: ErdNode }) {
         "rounded-2xl bg-white shadow-sm border",
         isSelected ? "border-black" : "border-zinc-200",
         "overflow-hidden select-none",
+        dim ? "opacity-30" : "",
       ].join(" ")}
     >
       <div className="h-11 px-3 flex items-center justify-between border-b border-zinc-200">

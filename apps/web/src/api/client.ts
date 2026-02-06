@@ -22,3 +22,18 @@ export async function postSnapshot(body: { targetDatabaseUrl: string; schemas: s
 export async function getAnnotations(instanceId: string) {
   return request<any>(`/api/v1/checklist-instances/${instanceId}/annotations`);
 }
+
+export async function getIssues(instanceId: string) {
+  return request<any>(`/api/v1/checklist-instances/${instanceId}/issues`);
+}
+
+export async function getErdLayout(instanceId: string) {
+  return request<any>(`/api/v1/checklist-instances/${instanceId}/erd-layout`);
+}
+
+export async function saveErdLayout(instanceId: string, layout: Record<string, any>) {
+  return request<any>(`/api/v1/checklist-instances/${instanceId}/erd-layout`, {
+    method: "PUT",
+    body: JSON.stringify({ layout }),
+  });
+}
