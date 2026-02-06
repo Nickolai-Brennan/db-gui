@@ -4,7 +4,10 @@ import { useAnnotations, usePgSnapshot } from "../api/hooks";
 import { buildGraph } from "../erd/graph";
 import { ErdCanvas } from "../erd/ErdCanvas";
 import { InspectorPanel } from "../erd/InspectorPanel";
+import { IssuesDrawer } from "../erd/IssuesDrawer";
+import { TopControls } from "../erd/TopControls";
 import { useErdStore } from "../stores/erdStore";
+import { filterGraph } from "../erd/filtering";
 
 function loadConnFromStorage() {
   const raw = localStorage.getItem("erd_conn");
@@ -27,20 +30,46 @@ export default function ErdPage() {
   const annQ = useAnnotations(instanceId!, !!conn && !showConn);
 
   const autoLayoutFn = useErdStore((s) => s.autoLayout);
+  const resetViewport = useErdStore((s) => s.resetViewport);
+  const filters = useErdStore((s) => s.filters);
+  const setFilters = useErdStore((s) => s.setFilters);
 
   const graph = useMemo(() => {
     if (!snapQ.data) return null;
     return buildGraph(snapQ.data, annQ.data);
   }, [snapQ.data, annQ.data]);
 
+  // Get all unique schemas
+  const schemasAll = useMemo(() => {
+    if (!graph) return [];
+    return Array.from(new Set(graph.nodes.map((n) => n.schema))).sort();
+  }, [graph]);
+
+  // Initialize filters with all schemas selected
+  useEffect(() => {
+    if (schemasAll.length > 0 && filters.schemas.length === 0) {
+      setFilters({ schemas: schemasAll });
+    }
+  }, [schemasAll, filters.schemas.length, setFilters]);
+
+  // Apply filtering
+  const filteredGraph = useMemo(() => {
+    if (!graph) return null;
+    return filterGraph(graph.nodes, graph.edges, {
+      schemas: filters.schemas.length > 0 ? filters.schemas : undefined,
+      search: filters.search,
+      hideIsolated: filters.hideIsolated,
+    });
+  }, [graph, filters]);
+
   const autoLayout = useCallback(() => {
-    if (graph?.nodes?.length) {
+    if (filteredGraph?.nodes?.length && graph) {
       autoLayoutFn(
-        graph.nodes.map((n) => n.key),
+        filteredGraph.nodes.map((n) => n.key),
         graph.schemaByKey
       );
     }
-  }, [graph, autoLayoutFn]);
+  }, [filteredGraph, graph, autoLayoutFn]);
 
   useEffect(() => {
     autoLayout();
@@ -65,32 +94,50 @@ export default function ErdPage() {
             Connection
           </button>
 
-          {graph ? (
-            <button
-              className="px-3 py-1.5 rounded-xl border border-zinc-200 text-sm"
-              onClick={autoLayout}
-            >
-              Auto layout
-            </button>
-          ) : null}
+          {filteredGraph && (
+            <TopControls
+              schemasAll={schemasAll}
+              selectedSchemas={filters.schemas}
+              onSchemasChange={(schemas) => setFilters({ schemas })}
+              search={filters.search}
+              onSearchChange={(search) => setFilters({ search })}
+              hideIsolated={filters.hideIsolated}
+              onHideIsolatedChange={(hideIsolated) => setFilters({ hideIsolated })}
+              showSchemaLanes={filters.showSchemaLanes}
+              onShowSchemaLanesChange={(showSchemaLanes) => setFilters({ showSchemaLanes })}
+              showMinimap={filters.showMinimap}
+              onShowMinimapChange={(showMinimap) => setFilters({ showMinimap })}
+              onAutoLayout={autoLayout}
+              onResetView={resetViewport}
+            />
+          )}
         </div>
       </div>
 
       {/* Body */}
       <div className="flex flex-1 min-h-0">
-        <div className="flex-1 min-w-0">
+        {filteredGraph && instanceId && <IssuesDrawer instanceId={instanceId} />}
+
+        <div className="flex-1 min-w-0 relative">
           {snapQ.isLoading ? (
             <div className="p-6 text-sm text-zinc-600">Loading snapshot…</div>
           ) : snapQ.isError ? (
             <div className="p-6 text-sm text-red-600">{String(snapQ.error)}</div>
-          ) : !graph ? (
+          ) : !filteredGraph ? (
             <div className="p-6 text-sm text-zinc-600">No snapshot loaded.</div>
           ) : (
-            <ErdCanvas nodes={graph.nodes} edges={graph.edges} />
+            <ErdCanvas
+              nodes={filteredGraph.nodes}
+              edges={filteredGraph.edges}
+              dimmed={filteredGraph.dimmed}
+              showSchemaLanes={filters.showSchemaLanes}
+              showMinimap={filters.showMinimap}
+              schemaByKey={graph!.schemaByKey}
+            />
           )}
         </div>
 
-        {graph ? <InspectorPanel nodes={graph.nodes} edges={graph.edges} /> : null}
+        {filteredGraph && <InspectorPanel nodes={filteredGraph.nodes} edges={filteredGraph.edges} />}
       </div>
 
       {/* Connection modal */}
