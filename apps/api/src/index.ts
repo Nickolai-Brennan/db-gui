@@ -23,18 +23,33 @@ await app.register(import("@fastify/cors"), {
 app.setErrorHandler((error, _request, reply) => {
   app.log.error(error);
 
-  if (error.validation) {
+  // Type guard for Fastify validation errors
+  const isFastifyError = (
+    err: unknown
+  ): err is { validation: unknown; statusCode?: number; name?: string; message?: string } => {
+    return typeof err === "object" && err !== null && "validation" in err;
+  };
+
+  if (isFastifyError(error)) {
     return reply.status(400).send({
       error: "Validation Error",
-      message: error.message,
+      message: error.message || "Request validation failed",
       details: error.validation,
     });
   }
 
-  const statusCode = error.statusCode ?? 500;
+  const statusCode =
+    typeof error === "object" && error !== null && "statusCode" in error
+      ? ((error.statusCode as number) ?? 500)
+      : 500;
+
   reply.status(statusCode).send({
-    error: error.name || "Internal Server Error",
-    message: error.message || "An unexpected error occurred",
+    error: (typeof error === "object" && error !== null && "name" in error
+      ? error.name
+      : "Internal Server Error") as string,
+    message: (typeof error === "object" && error !== null && "message" in error
+      ? error.message
+      : "An unexpected error occurred") as string,
   });
 });
 
