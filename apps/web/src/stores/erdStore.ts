@@ -9,6 +9,14 @@ export type Selected =
 export type Rect = { x: number; y: number; w: number; h: number };
 type Layout = Record<string, Rect>;
 
+export type Filters = {
+  schemas: string[];
+  search: string;
+  hideIsolated: boolean;
+  showSchemaLanes: boolean;
+  showMinimap: boolean;
+};
+
 type ErdStore = {
   viewport: Viewport;
   setViewport: (vp: Partial<Viewport>) => void;
@@ -21,6 +29,9 @@ type ErdStore = {
   setTableRect: (key: string, rect: Partial<Rect>) => void;
   ensureLayout: (tableKeys: string[]) => void;
   autoLayout: (tableKeys: string[], schemaByKey: Record<string, string>) => void;
+
+  filters: Filters;
+  setFilters: (filters: Partial<Filters>) => void;
 
   ui: { inspectorOpen: boolean };
   toggleInspector: () => void;
@@ -91,6 +102,15 @@ export const useErdStore = create<ErdStore>((set, get) => ({
 
     set({ layout });
   },
+
+  filters: {
+    schemas: [],
+    search: "",
+    hideIsolated: false,
+    showSchemaLanes: false,
+    showMinimap: true,
+  },
+  setFilters: (filters) => set((s) => ({ filters: { ...s.filters, ...filters } })),
 
   ui: { inspectorOpen: true },
   toggleInspector: () => set((s) => ({ ui: { inspectorOpen: !s.ui.inspectorOpen } })),
