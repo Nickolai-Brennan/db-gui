@@ -12,6 +12,19 @@ export async function sqlRoutes(app: FastifyInstance) {
     });
     const body = Body.parse(req.body);
 
+    // Basic SQL validation to prevent dangerous operations
+    const sqlLower = body.sql.toLowerCase().trim();
+    const dangerousKeywords = ["drop", "delete", "truncate", "alter", "create", "insert", "update"];
+    for (const keyword of dangerousKeywords) {
+      if (sqlLower.includes(keyword)) {
+        return {
+          error: `SQL test endpoint only allows SELECT queries. Detected '${keyword}' keyword.`,
+          rows: [],
+          columns: [],
+        };
+      }
+    }
+
     const pool = createTargetPool(body.targetDatabaseUrl);
 
     try {
@@ -26,7 +39,7 @@ export async function sqlRoutes(app: FastifyInstance) {
       const columns = result.fields.map((f: any) => ({ name: f.name, type: f.dataTypeID }));
 
       // Suggest mapping based on column names
-      const mappingSuggestions = guessMappingFromColumns(columns);
+      const mappingSuggestions = suggestMappingFromColumns(columns);
 
       return { rows, columns, mappingSuggestions };
     } catch (error) {
@@ -41,7 +54,7 @@ export async function sqlRoutes(app: FastifyInstance) {
   });
 }
 
-function guessMappingFromColumns(columns: { name: string; type: number }[]) {
+function suggestMappingFromColumns(columns: { name: string; type: number }[]) {
   const names = columns.map((c) => c.name.toLowerCase());
 
   // Check for table target

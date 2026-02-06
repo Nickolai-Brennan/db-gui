@@ -161,17 +161,17 @@ export async function instancesRoutes(app: FastifyInstance) {
     const resultsByNode = new Map(results.map((r: any) => [r.node_id, r]));
 
     // Build tree with results attached
-    const buildTree = (parentId: string | null): any[] => {
+    const buildResultTree = (parentId: string | null): any[] => {
       return nodes
         .filter((n: any) => n.parent_id === parentId)
         .map((n: any) => ({
           ...n,
           result: resultsByNode.get(n.id) || null,
-          children: buildTree(n.id),
+          children: buildResultTree(n.id),
         }));
     };
 
-    const tree = buildTree(null);
+    const tree = buildResultTree(null);
     return { tree };
   });
 
