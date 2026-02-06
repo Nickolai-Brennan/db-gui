@@ -5,6 +5,7 @@ import { runChecklist } from '../checklist/runner';
 const UUIDSchema = z.string().uuid();
 
 export async function instancesRoutes(app: FastifyInstance) {
+  // TODO: Add rate limiting for production use
   app.post('/api/v1/checklist-instances/:instanceId/run', async (req) => {
     const instanceId = UUIDSchema.parse((req.params as any).instanceId);
 

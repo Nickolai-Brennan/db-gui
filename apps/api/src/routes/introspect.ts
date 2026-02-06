@@ -5,6 +5,8 @@ import { createTargetPool } from '../targetDb';
 import { qColumns, qIndexes } from '../introspect/pgQueries';
 
 export async function introspectRoutes(app: FastifyInstance) {
+  // TODO: Add rate limiting for production use
+  // These endpoints access target databases and should be rate-limited to prevent abuse
   app.post('/api/v1/introspect/postgres/snapshot', async (req) => {
     const Body = z.object({
       targetDatabaseUrl: z.string().min(10),
