@@ -24,7 +24,8 @@ export function TableNodeCard({ node }: { node: TableNode }) {
     if (localY > 44) return;
 
     e.stopPropagation();
-    (e.currentTarget as any).setPointerCapture?.(e.pointerId);
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture?.(e.pointerId);
 
     setSelected({ type: 'table', key: node.key });
 

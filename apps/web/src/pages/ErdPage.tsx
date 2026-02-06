@@ -35,7 +35,9 @@ export default function ErdPage() {
     if (graph?.nodes?.length) {
       autoLayout(graph.nodes.map((n) => n.key), graph.schemaByKey);
     }
-  }, [graph?.nodes?.length]); // intentionally minimal
+    // Only run when graph structure changes (number of nodes), not on individual node updates
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph?.nodes?.length]);
 
   return (
     <div className="h-screen flex flex-col bg-white">
