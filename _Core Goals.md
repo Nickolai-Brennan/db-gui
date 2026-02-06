@@ -1,3 +1,159 @@
+## **1.8 Visual Modeling, ERDs & “Human-Friendly” Abstractions**
+
+This is where your SQL GUI stops being *another DBeaver clone* and becomes **a modeling-first system**.
+
+### 🎯 Core Goal
+
+Reduce **cognitive load** for users by translating raw database structure into **clear, visual, explorable models**—without hiding SQL power.
+
+---
+
+### 🔹 1.8.1 Auto-Generated ERDs (But Smarter)
+
+Most tools do this *badly*. Yours should:
+
+* Auto-generate ERDs from:
+
+  * Foreign keys
+  * Inferred relationships (naming patterns, ID matching)
+* Allow **manual overrides**
+* Support **multiple diagram modes**:
+
+  * Logical model (entities & relationships)
+  * Physical model (tables, indexes, constraints)
+  * Business model (renamed entities, aliases, grouped concepts)
+
+Key differentiator:
+
+> ERDs should be **editable objects**, not static diagrams.
+
+---
+
+### 🔹 1.8.2 Model Layers (This Is Big)
+
+Introduce **Model Layers** on top of raw schemas:
+
+* **Raw Layer**
+
+  * Exact DB reflection
+* **User Model Layer**
+
+  * Renamed tables/columns
+  * Virtual groupings (e.g. “Player Core Stats”)
+* **Project Model Layer**
+
+  * Saved views per project/app
+  * Shareable models across teams
+
+Think:
+
+> dbt-style semantics + BI modeling + IDE ergonomics
+
+---
+
+### 🔹 1.8.3 Visual Query Builder (No Training Wheels)
+
+Not “drag-and-drop for beginners”—instead:
+
+* Visual joins with live SQL preview
+* Toggle between:
+
+  * Diagram mode
+  * SQL editor
+* Highlight:
+
+  * Join paths
+  * Cardinality warnings
+  * Fan-out explosions
+
+Power move:
+
+> Every visual action = deterministic SQL output
+> SQL is always first-class, never hidden
+
+---
+
+### 🔹 1.8.4 Relationship Intelligence
+
+Add **relationship scoring**:
+
+* FK confidence
+* Usage frequency
+* Join cost estimates
+* Data volume impact
+
+This enables:
+
+* “Suggested joins”
+* Warnings before expensive queries
+* Smarter ERD auto-layouts
+
+---
+
+### 🔹 1.8.5 Domain-Specific Modeling (Your Secret Weapon)
+
+Let users define **domain templates**:
+
+* Sports analytics
+* Finance
+* SaaS events
+* E-commerce
+
+Each template:
+
+* Naming conventions
+* Common dimensions/facts
+* Default visual groupings
+
+This aligns *perfectly* with what you’ve been doing across stats-heavy systems.
+
+---
+
+### 🔹 1.8.6 Model Versioning & Diffing
+
+Treat models like code:
+
+* Version history
+* Visual diffs
+* Rollbacks
+* Environment comparisons (dev vs prod)
+
+Think Git — but for database *meaning*, not just schema.
+
+---
+
+### 🔹 1.8.7 Export & Interop
+
+Models should export to:
+
+* dbt YAML
+* GraphQL schemas
+* OpenAPI specs
+* Markdown docs
+* PNG/SVG diagrams
+
+This turns your GUI into:
+
+> A **source of truth generator**, not just a client
+
+---
+
+### Why 1.8 Matters
+
+This section is what lets you say:
+
+* “We’re not a SQL client”
+* “We’re a **database intelligence workspace**”
+
+If you want, next we can:
+
+* Continue with **1.9 Performance & Query Intelligence**
+* Or zoom in and turn **1.8 into a full product spec**
+* Or map **1.8 → MVP vs v2 vs v3**
+
+Just say where you want to go.
+
+
 ## **1.9 Performance, Query Intelligence & Cost Awareness**
 
 This is where your tool starts behaving like a **senior database engineer sitting next to the user**, quietly preventing disasters.
