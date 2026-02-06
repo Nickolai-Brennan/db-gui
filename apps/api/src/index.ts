@@ -2,6 +2,9 @@ import Fastify from "fastify";
 import { introspectRoutes } from "./routes/introspect";
 import { instancesRoutes } from "./routes/instances";
 import { annotationsRoutes } from "./routes/annotations";
+import { templatesRoutes } from "./routes/templates";
+import { nodesRoutes } from "./routes/nodes";
+import { sqlRoutes } from "./routes/sql";
 
 const app = Fastify({
   logger: true,
@@ -62,6 +65,9 @@ app.get("/health", async () => {
 await app.register(introspectRoutes);
 await app.register(instancesRoutes);
 await app.register(annotationsRoutes);
+await app.register(templatesRoutes);
+await app.register(nodesRoutes);
+await app.register(sqlRoutes);
 
 const port = Number(process.env.PORT ?? 3001);
 const host = process.env.HOST ?? "0.0.0.0";
