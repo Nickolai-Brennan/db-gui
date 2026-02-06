@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createTargetPool } from "../targetDb";
 
 export async function sqlRoutes(app: FastifyInstance) {
+  // TODO: Add rate limiting for production use - this endpoint accesses target databases
   app.post("/api/v1/sql/test", async (req) => {
     const Body = z.object({
       targetDatabaseUrl: z.string().min(10),
