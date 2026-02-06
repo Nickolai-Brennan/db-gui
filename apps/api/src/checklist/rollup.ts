@@ -1,5 +1,5 @@
-import { query, queryOne } from '../sql';
-import type { UUID } from '../types';
+import { query, queryOne } from "../sql";
+import type { UUID } from "../types";
 
 type RollupCounts = {
   totalItems: number;
@@ -26,12 +26,16 @@ export async function recomputeInstanceRollup(instanceId: UUID): Promise<RollupC
     [instanceId]
   );
 
-  const rollupStatus = 
-    stats.blocked_count > 0 ? 'blocked' :
-    stats.fail_count > 0 ? 'fail' :
-    stats.warning_count > 0 ? 'warning' :
-    stats.unchecked_count > 0 ? 'incomplete' :
-    'pass';
+  const rollupStatus =
+    stats.blocked_count > 0
+      ? "blocked"
+      : stats.fail_count > 0
+        ? "fail"
+        : stats.warning_count > 0
+          ? "warning"
+          : stats.unchecked_count > 0
+            ? "incomplete"
+            : "pass";
 
   await query(
     `

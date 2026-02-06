@@ -1,10 +1,10 @@
-import type { Pool } from 'pg';
+import type { Pool } from "pg";
 
 export type NoPrimaryKeyRow = { schema: string; table: string };
 
 export async function checkNoPrimaryKey(
   pool: Pool,
-  schemas: string[],
+  schemas: string[]
 ): Promise<{ violations: NoPrimaryKeyRow[] }> {
   const res = await pool.query<NoPrimaryKeyRow>(
     `
@@ -26,7 +26,7 @@ export async function checkNoPrimaryKey(
     WHERE pk.conrelid IS NULL
     ORDER BY t.schema, t.table;
     `,
-    [schemas],
+    [schemas]
   );
 
   return { violations: res.rows };

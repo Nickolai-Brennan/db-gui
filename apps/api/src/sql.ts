@@ -1,5 +1,5 @@
-import { getPool } from './db';
-import type { QueryResult, QueryResultRow } from 'pg';
+import { getPool } from "./db";
+import type { QueryResult, QueryResultRow } from "pg";
 
 export async function query<T extends QueryResultRow = any>(
   text: string,
@@ -15,7 +15,7 @@ export async function queryOne<T extends QueryResultRow = any>(
 ): Promise<T> {
   const rows = await query<T>(text, params);
   if (rows.length === 0) {
-    throw new Error('Expected one row, got zero');
+    throw new Error("Expected one row, got zero");
   }
   return rows[0]!;
 }

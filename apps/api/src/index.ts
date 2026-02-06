@@ -3,13 +3,13 @@ import { introspectRoutes } from "./routes/introspect";
 import { instancesRoutes } from "./routes/instances";
 import { annotationsRoutes } from "./routes/annotations";
 
-const app = Fastify({ 
+const app = Fastify({
   logger: true,
   ajv: {
     customOptions: {
       removeAdditional: false,
       useDefaults: true,
-      coerceTypes: 'array',
+      coerceTypes: "array",
     },
   },
 });
@@ -22,10 +22,10 @@ await app.register(import("@fastify/cors"), {
 // Error handler
 app.setErrorHandler((error, _request, reply) => {
   app.log.error(error);
-  
+
   if (error.validation) {
     return reply.status(400).send({
-      error: 'Validation Error',
+      error: "Validation Error",
       message: error.message,
       details: error.validation,
     });
@@ -33,8 +33,8 @@ app.setErrorHandler((error, _request, reply) => {
 
   const statusCode = error.statusCode ?? 500;
   reply.status(statusCode).send({
-    error: error.name || 'Internal Server Error',
-    message: error.message || 'An unexpected error occurred',
+    error: error.name || "Internal Server Error",
+    message: error.message || "An unexpected error occurred",
   });
 });
 

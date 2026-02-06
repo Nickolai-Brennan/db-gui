@@ -1,17 +1,17 @@
-import { useMemo } from 'react';
-import { useErdStore } from '../stores/erdStore';
-import type { Edge, TableNode } from './graph';
+import { useMemo } from "react";
+import { useErdStore } from "../stores/erdStore";
+import type { ErdEdge, ErdNode } from "./graph";
 
-export function InspectorPanel({ nodes, edges }: { nodes: TableNode[]; edges: Edge[] }) {
+export function InspectorPanel({ nodes, edges }: { nodes: ErdNode[]; edges: ErdEdge[] }) {
   const selected = useErdStore((s) => s.selected);
 
   const table = useMemo(() => {
-    if (selected.type !== 'table') return null;
+    if (selected.type !== "table") return null;
     return nodes.find((n) => n.key === selected.key) ?? null;
   }, [selected, nodes]);
 
   const rel = useMemo(() => {
-    if (selected.type !== 'relationship') return null;
+    if (selected.type !== "relationship") return null;
     return edges.find((e) => e.key === selected.key) ?? null;
   }, [selected, edges]);
 
@@ -33,7 +33,7 @@ export function InspectorPanel({ nodes, edges }: { nodes: TableNode[]; edges: Ed
             <div>
               <div className="text-xs font-semibold text-zinc-700 mb-2">Primary Key</div>
               {table.pkCols.length ? (
-                <div className="text-sm">{table.pkCols.join(', ')}</div>
+                <div className="text-sm">{table.pkCols.join(", ")}</div>
               ) : (
                 <div className="text-sm text-zinc-500">None</div>
               )}
@@ -45,15 +45,19 @@ export function InspectorPanel({ nodes, edges }: { nodes: TableNode[]; edges: Ed
                 {table.indexes.slice(0, 8).map((ix) => (
                   <div key={ix.name} className="rounded-xl border border-zinc-200 p-2">
                     <div className="text-sm font-medium">{ix.name}</div>
-                    <div className="text-xs text-zinc-500">{ix.columns.join(', ') || '(expression)'}</div>
+                    <div className="text-xs text-zinc-500">
+                      {ix.columns.join(", ") || "(expression)"}
+                    </div>
                     <div className="text-[11px] text-zinc-500 mt-1">
-                      {ix.isPrimary ? 'PRIMARY ' : ''}
-                      {ix.isUnique ? 'UNIQUE ' : ''}
-                      {ix.isValid ? '' : 'INVALID'}
+                      {ix.isPrimary ? "PRIMARY " : ""}
+                      {ix.isUnique ? "UNIQUE " : ""}
+                      {ix.isValid ? "" : "INVALID"}
                     </div>
                   </div>
                 ))}
-                {!table.indexes.length ? <div className="text-sm text-zinc-500">No indexes found</div> : null}
+                {!table.indexes.length ? (
+                  <div className="text-sm text-zinc-500">No indexes found</div>
+                ) : null}
               </div>
             </div>
           </>
@@ -61,17 +65,19 @@ export function InspectorPanel({ nodes, edges }: { nodes: TableNode[]; edges: Ed
           <>
             <div>
               <div className="text-lg font-semibold">{rel.name}</div>
-              <div className="text-sm text-zinc-500">{rel.childKey} → {rel.parentKey}</div>
+              <div className="text-sm text-zinc-500">
+                {rel.childKey} → {rel.parentKey}
+              </div>
             </div>
 
             <div className="rounded-xl border border-zinc-200 p-3">
               <div className="text-xs font-semibold text-zinc-700 mb-1">Join</div>
               <div className="text-sm">
-                ({rel.childCols.join(', ')}) → ({rel.parentCols.join(', ')})
+                ({rel.childCols.join(", ")}) → ({rel.parentCols.join(", ")})
               </div>
               {rel.severity ? (
                 <div className="text-xs text-zinc-500 mt-2">
-                  Annotation: {rel.severity} {rel.count ? `· ${rel.count}` : ''}
+                  Annotation: {rel.severity} {rel.count ? `· ${rel.count}` : ""}
                 </div>
               ) : null}
             </div>

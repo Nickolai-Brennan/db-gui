@@ -1,4 +1,4 @@
-import type { Pool } from 'pg';
+import type { Pool } from "pg";
 
 export type FkNotIndexedRow = {
   fk_name: string;
@@ -9,7 +9,7 @@ export type FkNotIndexedRow = {
 
 export async function checkFkNotIndexed(
   pool: Pool,
-  schemas: string[],
+  schemas: string[]
 ): Promise<{ violations: FkNotIndexedRow[] }> {
   const res = await pool.query<FkNotIndexedRow>(
     `
@@ -69,7 +69,7 @@ export async function checkFkNotIndexed(
     WHERE matches.has_index = false
     ORDER BY fk_cols.child_schema, fk_cols.child_table, fk_cols.fk_name;
     `,
-    [schemas],
+    [schemas]
   );
 
   return { violations: res.rows };

@@ -48,6 +48,7 @@ src/
 Get a complete snapshot of database schema for ERD rendering.
 
 **Request:**
+
 ```json
 {
   "targetDatabaseUrl": "postgresql://user:pass@localhost:5432/mydb",
@@ -56,6 +57,7 @@ Get a complete snapshot of database schema for ERD rendering.
 ```
 
 **Response:**
+
 ```json
 {
   "snapshot": {
@@ -76,6 +78,7 @@ Get a complete snapshot of database schema for ERD rendering.
 Get detailed information for a specific table.
 
 **Request:**
+
 ```json
 {
   "targetDatabaseUrl": "postgresql://user:pass@localhost:5432/mydb",
@@ -91,16 +94,18 @@ Get detailed information for a specific table.
 Run checks for a checklist instance.
 
 **Request:**
+
 ```json
 {
   "targetDatabaseUrl": "postgresql://user:pass@localhost:5432/mydb",
   "schemas": ["public"],
   "mode": "all",
-  "nodeIds": []  // optional: specific checks to run
+  "nodeIds": [] // optional: specific checks to run
 }
 ```
 
 **Response:**
+
 ```json
 {
   "ok": true,
@@ -122,6 +127,7 @@ Run checks for a checklist instance.
 Get ERD overlay annotations (issue badges and relationship highlights).
 
 **Response:**
+
 ```json
 {
   "instanceId": "uuid",

@@ -1,9 +1,9 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 export type Viewport = { x: number; y: number; zoom: number };
 export type Selected =
-  | { type: 'table'; key: string }
-  | { type: 'relationship'; key: string }
+  | { type: "table"; key: string }
+  | { type: "relationship"; key: string }
   | { type: null };
 
 export type Rect = { x: number; y: number; w: number; h: number };
@@ -25,8 +25,8 @@ type ErdStore = {
   ui: { inspectorOpen: boolean };
   toggleInspector: () => void;
 
-  focusTarget: { type: 'table' | 'relationship'; key: string } | null;
-  focusOn: (t: { type: 'table' | 'relationship'; key: string } | null) => void;
+  focusTarget: { type: "table" | "relationship"; key: string } | null;
+  focusOn: (t: { type: "table" | "relationship"; key: string } | null) => void;
 };
 
 export const useErdStore = create<ErdStore>((set, get) => ({
@@ -60,11 +60,11 @@ export const useErdStore = create<ErdStore>((set, get) => ({
 
   autoLayout: (tableKeys, schemaByKey) => {
     // Simple lanes-by-schema layout (v1)
-    const schemas = Array.from(new Set(tableKeys.map((k) => schemaByKey[k] ?? 'public'))).sort();
+    const schemas = Array.from(new Set(tableKeys.map((k) => schemaByKey[k] ?? "public"))).sort();
     const perSchema: Record<string, string[]> = {};
     for (const s of schemas) perSchema[s] = [];
     for (const k of tableKeys) {
-      const schema = schemaByKey[k] ?? 'public';
+      const schema = schemaByKey[k] ?? "public";
       if (perSchema[schema]) perSchema[schema].push(k);
     }
 

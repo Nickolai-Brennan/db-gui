@@ -1,4 +1,4 @@
-import type { Pool } from 'pg';
+import type { Pool } from "pg";
 
 export type FkMeta = {
   fk_name: string;
@@ -35,7 +35,7 @@ export async function getForeignKeys(pool: Pool, schemas: string[]): Promise<FkM
     GROUP BY con.conname, n_child.nspname, c_child.relname, n_parent.nspname, c_parent.relname
     ORDER BY n_child.nspname, c_child.relname, con.conname;
     `,
-    [schemas],
+    [schemas]
   );
 
   return res.rows;

@@ -1,5 +1,5 @@
-import type { Pool } from 'pg';
-import type { FkMeta } from './fkMeta';
+import type { Pool } from "pg";
+import type { FkMeta } from "./fkMeta";
 
 export type FkViolation = {
   fk: FkMeta;
@@ -14,7 +14,7 @@ function qIdent(s: string) {
 export async function checkFkHasViolations(
   pool: Pool,
   fks: FkMeta[],
-  sampleLimit = 25,
+  sampleLimit = 25
 ): Promise<{ violations: FkViolation[] }> {
   const out: FkViolation[] = [];
 
@@ -24,9 +24,9 @@ export async function checkFkHasViolations(
 
     const joinPred = fk.child_cols
       .map((c, i) => `c.${qIdent(c)} = p.${qIdent(fk.parent_cols[i]!)}`)
-      .join(' AND ');
+      .join(" AND ");
 
-    const notNullPred = fk.child_cols.map((c) => `c.${qIdent(c)} IS NOT NULL`).join(' AND ');
+    const notNullPred = fk.child_cols.map((c) => `c.${qIdent(c)} IS NOT NULL`).join(" AND ");
     const isOrphanPred = `p.${qIdent(fk.parent_cols[0]!)} IS NULL`;
 
     const countSql = `

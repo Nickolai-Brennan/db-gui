@@ -1,5 +1,5 @@
-import { query } from '../sql';
-import type { UUID } from '../types';
+import { query } from "../sql";
+import type { UUID } from "../types";
 
 export async function ensureInstanceResults(instanceId: UUID): Promise<void> {
   await query(

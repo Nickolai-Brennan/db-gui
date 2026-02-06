@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useErdStore } from "../stores/erdStore";
-import type { Edge, TableNode } from "./graph";
+import type { ErdEdge, ErdNode } from "./graph";
 import { bezierPath, centerLeft, centerRight } from "./anchors";
 import { TableNodeCard } from "./TableNode";
 
-export function ErdCanvas({ nodes, edges }: { nodes: TableNode[]; edges: Edge[] }) {
+export function ErdCanvas({ nodes, edges }: { nodes: ErdNode[]; edges: ErdEdge[] }) {
   const viewport = useErdStore((s) => s.viewport);
   const setViewport = useErdStore((s) => s.setViewport);
   const resetViewport = useErdStore((s) => s.resetViewport);

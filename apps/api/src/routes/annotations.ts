@@ -1,15 +1,15 @@
-import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
-import { query } from '../sql';
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { query } from "../sql";
 
 const UUIDSchema = z.string().uuid();
 
 function sevRank(sev: string) {
-  return sev === 'blocking' ? 3 : sev === 'error' ? 2 : sev === 'warning' ? 1 : 0;
+  return sev === "blocking" ? 3 : sev === "error" ? 2 : sev === "warning" ? 1 : 0;
 }
 
 export async function annotationsRoutes(app: FastifyInstance) {
-  app.get('/api/v1/checklist-instances/:instanceId/annotations', async (req) => {
+  app.get("/api/v1/checklist-instances/:instanceId/annotations", async (req) => {
     const instanceId = UUIDSchema.parse((req.params as any).instanceId);
 
     const rows = await query<any>(
@@ -19,7 +19,7 @@ export async function annotationsRoutes(app: FastifyInstance) {
       WHERE instance_id = $1
         AND status IN ('blocked','fail','warning')
       `,
-      [instanceId],
+      [instanceId]
     );
 
     const tableMap = new Map<string, { severity: string; count: number }>();
@@ -28,7 +28,7 @@ export async function annotationsRoutes(app: FastifyInstance) {
     for (const r of rows) {
       const targets = r.output?.targets ?? [];
       for (const t of targets) {
-        if (t.kind === 'table') {
+        if (t.kind === "table") {
           const key = `${t.schema}.${t.table}`;
           const existing = tableMap.get(key);
           if (!existing) {
@@ -39,10 +39,10 @@ export async function annotationsRoutes(app: FastifyInstance) {
           }
         }
 
-        if (t.kind === 'relationship') {
-          const childCols = (t.childCols ?? []).join(',');
-          const parentCols = (t.parentCols ?? []).join(',');
-          const key = `${t.childSchema}.${t.childTable}(${childCols})->${t.parentSchema ?? ''}.${t.parentTable ?? ''}(${parentCols})`;
+        if (t.kind === "relationship") {
+          const childCols = (t.childCols ?? []).join(",");
+          const parentCols = (t.parentCols ?? []).join(",");
+          const key = `${t.childSchema}.${t.childTable}(${childCols})->${t.parentSchema ?? ""}.${t.parentTable ?? ""}(${parentCols})`;
 
           const existing = relMap.get(key);
           const ref = {
@@ -66,7 +66,7 @@ export async function annotationsRoutes(app: FastifyInstance) {
     }
 
     const tables = Array.from(tableMap.entries()).map(([k, v]) => {
-      const [schema, table] = k.split('.');
+      const [schema, table] = k.split(".");
       return { schema, table, severity: v.severity, count: v.count };
     });
 

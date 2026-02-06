@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { useAnnotations, usePgSnapshot } from '../api/hooks';
-import { buildGraph } from '../erd/graph';
-import { ErdCanvas } from '../erd/ErdCanvas';
-import { InspectorPanel } from '../erd/InspectorPanel';
-import { useErdStore } from '../stores/erdStore';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
+import { useAnnotations, usePgSnapshot } from "../api/hooks";
+import { buildGraph } from "../erd/graph";
+import { ErdCanvas } from "../erd/ErdCanvas";
+import { InspectorPanel } from "../erd/InspectorPanel";
+import { useErdStore } from "../stores/erdStore";
 
 function loadConnFromStorage() {
-  const raw = localStorage.getItem('erd_conn');
+  const raw = localStorage.getItem("erd_conn");
   if (!raw) return null;
   try {
     return JSON.parse(raw) as { targetDatabaseUrl: string; schemas: string[] };
@@ -18,26 +18,33 @@ function loadConnFromStorage() {
 
 export default function ErdPage() {
   const { wsId, instanceId } = useParams();
-  const [conn, setConn] = useState<{ targetDatabaseUrl: string; schemas: string[] } | null>(loadConnFromStorage());
+  const [conn, setConn] = useState<{ targetDatabaseUrl: string; schemas: string[] } | null>(
+    loadConnFromStorage()
+  );
   const [showConn, setShowConn] = useState(!conn);
 
   const snapQ = usePgSnapshot(!!conn && !showConn, conn);
   const annQ = useAnnotations(instanceId!, !!conn && !showConn);
 
-  const autoLayout = useErdStore((s) => s.autoLayout);
+  const autoLayoutFn = useErdStore((s) => s.autoLayout);
 
   const graph = useMemo(() => {
     if (!snapQ.data) return null;
     return buildGraph(snapQ.data, annQ.data);
   }, [snapQ.data, annQ.data]);
 
-  useEffect(() => {
+  const autoLayout = useCallback(() => {
     if (graph?.nodes?.length) {
-      autoLayout(graph.nodes.map((n) => n.key), graph.schemaByKey);
+      autoLayoutFn(
+        graph.nodes.map((n) => n.key),
+        graph.schemaByKey
+      );
     }
-    // Only run when graph structure changes (number of nodes), not on individual node updates
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph?.nodes?.length]);
+  }, [graph, autoLayoutFn]);
+
+  useEffect(() => {
+    autoLayout();
+  }, [autoLayout]);
 
   return (
     <div className="h-screen flex flex-col bg-white">
@@ -61,7 +68,7 @@ export default function ErdPage() {
           {graph ? (
             <button
               className="px-3 py-1.5 rounded-xl border border-zinc-200 text-sm"
-              onClick={() => autoLayout(graph.nodes.map((n) => n.key), graph.schemaByKey)}
+              onClick={autoLayout}
             >
               Auto layout
             </button>
@@ -92,7 +99,7 @@ export default function ErdPage() {
           initial={conn}
           onClose={() => setShowConn(false)}
           onSave={(next) => {
-            localStorage.setItem('erd_conn', JSON.stringify(next));
+            localStorage.setItem("erd_conn", JSON.stringify(next));
             setConn(next);
             setShowConn(false);
           }}
@@ -111,8 +118,8 @@ function ConnectionModal({
   onClose: () => void;
   onSave: (c: { targetDatabaseUrl: string; schemas: string[] }) => void;
 }) {
-  const [url, setUrl] = useState(initial?.targetDatabaseUrl ?? '');
-  const [schemas, setSchemas] = useState((initial?.schemas ?? ['public']).join(','));
+  const [url, setUrl] = useState(initial?.targetDatabaseUrl ?? "");
+  const [schemas, setSchemas] = useState((initial?.schemas ?? ["public"]).join(","));
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
@@ -122,7 +129,10 @@ function ConnectionModal({
             <div className="text-sm font-semibold">Target connection</div>
             <div className="text-xs text-zinc-500">v1: stored in localStorage</div>
           </div>
-          <button className="px-3 py-1.5 rounded-xl border border-zinc-200 text-sm" onClick={onClose}>
+          <button
+            className="px-3 py-1.5 rounded-xl border border-zinc-200 text-sm"
+            onClick={onClose}
+          >
             Close
           </button>
         </div>
@@ -153,10 +163,10 @@ function ConnectionModal({
               className="px-4 py-2 rounded-xl bg-black text-white text-sm"
               onClick={() => {
                 const list = schemas
-                  .split(',')
+                  .split(",")
                   .map((s) => s.trim())
                   .filter(Boolean);
-                onSave({ targetDatabaseUrl: url.trim(), schemas: list.length ? list : ['public'] });
+                onSave({ targetDatabaseUrl: url.trim(), schemas: list.length ? list : ["public"] });
               }}
             >
               Save & Load

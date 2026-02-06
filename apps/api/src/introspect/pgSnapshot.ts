@@ -1,12 +1,20 @@
-import type { Pool } from 'pg';
-import { createTargetPool } from '../targetDb';
+import type { Pool } from "pg";
+import { createTargetPool } from "../targetDb";
 import {
-  qTables, qColumns, qPrimaryKeys, qUniqueConstraints, qForeignKeys, qIndexes
-} from './pgQueries';
-import { fkAction } from './pgMaps';
-import type { PgSnapshot } from './types';
+  qTables,
+  qColumns,
+  qPrimaryKeys,
+  qUniqueConstraints,
+  qForeignKeys,
+  qIndexes,
+} from "./pgQueries";
+import { fkAction } from "./pgMaps";
+import type { PgSnapshot } from "./types";
 
-export async function getPgSnapshot(targetDatabaseUrl: string, schemas: string[]): Promise<PgSnapshot> {
+export async function getPgSnapshot(
+  targetDatabaseUrl: string,
+  schemas: string[]
+): Promise<PgSnapshot> {
   const pool: Pool = createTargetPool(targetDatabaseUrl);
 
   try {

@@ -1,20 +1,20 @@
-import type { Pool } from 'pg';
-import { createTargetPool } from '../targetDb';
-import { query, queryOne } from '../sql';
-import type { UUID } from '../types';
-import { ensureInstanceResults } from './ensureResults';
-import { recomputeInstanceRollup } from './rollup';
+import type { Pool } from "pg";
+import { createTargetPool } from "../targetDb";
+import { query, queryOne } from "../sql";
+import type { UUID } from "../types";
+import { ensureInstanceResults } from "./ensureResults";
+import { recomputeInstanceRollup } from "./rollup";
 
-import { checkNoPrimaryKey } from '../checks/noPrimaryKey';
-import { checkFkNotIndexed } from '../checks/fkNotIndexed';
-import { getForeignKeys } from '../checks/fkMeta';
-import { checkFkHasViolations } from '../checks/fkHasViolations';
+import { checkNoPrimaryKey } from "../checks/noPrimaryKey";
+import { checkFkNotIndexed } from "../checks/fkNotIndexed";
+import { getForeignKeys } from "../checks/fkMeta";
+import { checkFkHasViolations } from "../checks/fkHasViolations";
 
 type RunInput = {
   instanceId: UUID;
   targetDatabaseUrl: string;
   schemas: string[];
-  mode: 'all' | 'items';
+  mode: "all" | "items";
   nodeIds?: UUID[];
 };
 
@@ -23,10 +23,10 @@ function nowMs() {
 }
 
 function statusFor(severity: string, violationsCount: number) {
-  if (violationsCount <= 0) return 'pass';
-  if (severity === 'blocking') return 'blocked';
-  if (severity === 'warning') return 'warning';
-  return 'fail';
+  if (violationsCount <= 0) return "pass";
+  if (severity === "blocking") return "blocked";
+  if (severity === "warning") return "warning";
+  return "fail";
 }
 
 export async function runChecklist(input: RunInput) {
@@ -36,13 +36,13 @@ export async function runChecklist(input: RunInput) {
 
   const inst = await queryOne<any>(
     `SELECT id, template_version_id FROM checklist_instances WHERE id=$1`,
-    [instanceId],
+    [instanceId]
   );
 
   const params: any[] = [inst.template_version_id];
   let where = `WHERE n.version_id=$1 AND n.node_type='check' AND n.check_code IS NOT NULL`;
 
-  if (mode === 'items' && nodeIds && nodeIds.length > 0) {
+  if (mode === "items" && nodeIds && nodeIds.length > 0) {
     params.push(nodeIds);
     where += ` AND n.id = ANY($2::uuid[])`;
   }
@@ -53,7 +53,7 @@ export async function runChecklist(input: RunInput) {
     FROM checklist_nodes n
     ${where}
     `,
-    params,
+    params
   );
 
   const targetPool: Pool = createTargetPool(targetDatabaseUrl);
@@ -64,7 +64,7 @@ export async function runChecklist(input: RunInput) {
     for (const item of items) {
       const start = nowMs();
       const checkRef = item.check_code as string | null;
-      const severity = (item.severity ?? 'warning') as string;
+      const severity = (item.severity ?? "warning") as string;
 
       let violationsCount = 0;
       let outputSummary: string | null = null;
@@ -74,7 +74,7 @@ export async function runChecklist(input: RunInput) {
 
       if (!checkRef) continue;
 
-      if (checkRef === 'NO_PRIMARY_KEY') {
+      if (checkRef === "NO_PRIMARY_KEY") {
         const res = await checkNoPrimaryKey(targetPool, schemas);
         violationsCount = res.violations.length;
         outputSummary = `${violationsCount} tables missing primary key`;
@@ -82,13 +82,13 @@ export async function runChecklist(input: RunInput) {
         outputRows = res.violations.slice(0, 50);
 
         targetRefs = res.violations.map((v) => ({
-          kind: 'table',
+          kind: "table",
           schema: v.schema,
           table: v.table,
         }));
       }
 
-      if (checkRef === 'FK_NOT_INDEXED') {
+      if (checkRef === "FK_NOT_INDEXED") {
         const res = await checkFkNotIndexed(targetPool, schemas);
         violationsCount = res.violations.length;
         outputSummary = `${violationsCount} foreign keys missing a supporting index`;
@@ -96,7 +96,7 @@ export async function runChecklist(input: RunInput) {
         outputRows = res.violations.slice(0, 50);
 
         targetRefs = res.violations.map((v) => ({
-          kind: 'relationship',
+          kind: "relationship",
           fkName: v.fk_name,
           childSchema: v.child_schema,
           childTable: v.child_table,
@@ -104,7 +104,7 @@ export async function runChecklist(input: RunInput) {
         }));
       }
 
-      if (checkRef === 'FK_HAS_VIOLATIONS') {
+      if (checkRef === "FK_HAS_VIOLATIONS") {
         const res = await checkFkHasViolations(targetPool, fks, 25);
         violationsCount = res.violations.length;
         outputSummary = `${violationsCount} foreign keys have violating rows`;
@@ -119,7 +119,7 @@ export async function runChecklist(input: RunInput) {
         }));
 
         targetRefs = res.violations.map((v) => ({
-          kind: 'relationship',
+          kind: "relationship",
           fkName: v.fk.fk_name,
           childSchema: v.fk.child_schema,
           childTable: v.fk.child_table,
@@ -159,8 +159,8 @@ export async function runChecklist(input: RunInput) {
             rows: outputRows,
             targets: targetRefs,
             durationMs,
-          }
-        ],
+          },
+        ]
       );
     }
 

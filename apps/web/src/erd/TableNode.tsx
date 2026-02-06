@@ -1,22 +1,22 @@
-import React from 'react';
-import { useErdStore } from '../stores/erdStore';
-import type { TableNode } from './graph';
+import React from "react";
+import { useErdStore } from "../stores/erdStore";
+import type { ErdNode } from "./graph";
 
 function severityLabel(sev?: string) {
   if (!sev) return null;
-  if (sev === 'blocking') return 'BLOCK';
-  if (sev === 'error') return 'FAIL';
-  if (sev === 'warning') return 'WARN';
+  if (sev === "blocking") return "BLOCK";
+  if (sev === "error") return "FAIL";
+  if (sev === "warning") return "WARN";
   return sev.toUpperCase();
 }
 
-export function TableNodeCard({ node }: { node: TableNode }) {
+export function TableNodeCard({ node }: { node: ErdNode }) {
   const layout = useErdStore((s) => s.layout[node.key]);
   const setRect = useErdStore((s) => s.setTableRect);
   const selected = useErdStore((s) => s.selected);
   const setSelected = useErdStore((s) => s.setSelected);
 
-  const isSelected = selected.type === 'table' && selected.key === node.key;
+  const isSelected = selected.type === "table" && selected.key === node.key;
 
   const onPointerDown = (e: React.PointerEvent) => {
     // start drag only from header area (top 44px)
@@ -27,7 +27,7 @@ export function TableNodeCard({ node }: { node: TableNode }) {
     const target = e.currentTarget as HTMLElement;
     target.setPointerCapture?.(e.pointerId);
 
-    setSelected({ type: 'table', key: node.key });
+    setSelected({ type: "table", key: node.key });
 
     const startX = e.clientX;
     const startY = e.clientY;
@@ -39,12 +39,12 @@ export function TableNodeCard({ node }: { node: TableNode }) {
       setRect(node.key, { x: startRect.x + dx, y: startRect.y + dy });
     };
     const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
     };
 
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
   };
 
   if (!layout) return null;
@@ -54,20 +54,20 @@ export function TableNodeCard({ node }: { node: TableNode }) {
       onPointerDown={onPointerDown}
       onClick={(e) => {
         e.stopPropagation();
-        setSelected({ type: 'table', key: node.key });
+        setSelected({ type: "table", key: node.key });
       }}
       style={{
-        position: 'absolute',
+        position: "absolute",
         left: layout.x,
         top: layout.y,
         width: layout.w,
         height: layout.h,
       }}
       className={[
-        'rounded-2xl bg-white shadow-sm border',
-        isSelected ? 'border-black' : 'border-zinc-200',
-        'overflow-hidden select-none',
-      ].join(' ')}
+        "rounded-2xl bg-white shadow-sm border",
+        isSelected ? "border-black" : "border-zinc-200",
+        "overflow-hidden select-none",
+      ].join(" ")}
     >
       <div className="h-11 px-3 flex items-center justify-between border-b border-zinc-200">
         <div className="min-w-0">
@@ -92,7 +92,9 @@ export function TableNodeCard({ node }: { node: TableNode }) {
               <div className="truncate">
                 <span className="font-medium">{c.name}</span>
                 {node.pkCols.includes(c.name) ? (
-                  <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded border border-zinc-200">PK</span>
+                  <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded border border-zinc-200">
+                    PK
+                  </span>
                 ) : null}
               </div>
               <div className="text-zinc-500 truncate">{c.dataType}</div>
