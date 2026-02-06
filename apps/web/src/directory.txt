@@ -1,0 +1,16 @@
+apps/web/src/
+├─ api/
+│  ├─ client.ts
+│  ├─ hooks.ts
+│  └─ types.ts
+├─ erd/
+│  ├─ graph.ts
+│  ├─ anchors.ts
+│  ├─ ErdCanvas.tsx
+│  ├─ TableNode.tsx
+│  └─ InspectorPanel.tsx
+├─ pages/
+│  └─ ErdPage.tsx
+├─ stores/
+│  └─ erdStore.ts
+└─ main.tsx (wire router + query client)
