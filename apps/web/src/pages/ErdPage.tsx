@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { useAnnotations, usePgSnapshot } from "../api/hooks";
+import { useAnnotations, usePgSnapshot, useErdLayout } from "../api/hooks";
+import { usePersistLayout } from "../api/usePersistLayout";
 import { buildGraph } from "../erd/graph";
 import { ErdCanvas } from "../erd/ErdCanvas";
 import { InspectorPanel } from "../erd/InspectorPanel";
@@ -28,16 +29,32 @@ export default function ErdPage() {
 
   const snapQ = usePgSnapshot(!!conn && !showConn, conn);
   const annQ = useAnnotations(instanceId!, !!conn && !showConn);
+  const layoutQ = useErdLayout(instanceId!, !!conn && !showConn);
 
   const autoLayoutFn = useErdStore((s) => s.autoLayout);
   const resetViewport = useErdStore((s) => s.resetViewport);
   const filters = useErdStore((s) => s.filters);
   const setFilters = useErdStore((s) => s.setFilters);
+  const setTableRect = useErdStore((s) => s.setTableRect);
 
   const graph = useMemo(() => {
     if (!snapQ.data) return null;
     return buildGraph(snapQ.data, annQ.data);
   }, [snapQ.data, annQ.data]);
+
+  // Enable layout persistence (only when graph is loaded)
+  usePersistLayout(instanceId!, !!conn && !showConn && !!graph);
+
+  // Hydrate layout from saved data
+  useEffect(() => {
+    if (layoutQ.data && Object.keys(layoutQ.data).length > 0) {
+      for (const [key, rect] of Object.entries(layoutQ.data)) {
+        if (rect && typeof rect === "object" && "x" in rect) {
+          setTableRect(key, rect as any);
+        }
+      }
+    }
+  }, [layoutQ.data, setTableRect]);
 
   // Get all unique schemas
   const schemasAll = useMemo(() => {

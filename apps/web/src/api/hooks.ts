@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getAnnotations, postSnapshot } from "./client";
+import { getAnnotations, postSnapshot, getErdLayout } from "./client";
 import type { ErdAnnotations, PgSnapshot } from "./types";
 
 export function usePgSnapshot(
@@ -23,5 +23,17 @@ export function useAnnotations(instanceId: string, enabled: boolean) {
     enabled: enabled && !!instanceId,
     queryFn: async () => (await getAnnotations(instanceId)) as ErdAnnotations,
     staleTime: 10_000,
+  });
+}
+
+export function useErdLayout(instanceId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["erdLayout", instanceId],
+    enabled: enabled && !!instanceId,
+    queryFn: async () => {
+      const res = await getErdLayout(instanceId);
+      return res.layout as Record<string, any>;
+    },
+    staleTime: 5_000,
   });
 }
