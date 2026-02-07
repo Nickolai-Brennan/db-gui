@@ -9,6 +9,7 @@ import { checkNoPrimaryKey } from "../checks/noPrimaryKey";
 import { checkFkNotIndexed } from "../checks/fkNotIndexed";
 import { getForeignKeys } from "../checks/fkMeta";
 import { checkFkHasViolations } from "../checks/fkHasViolations";
+import { runSqlCheck } from "../sqlrunner/runSqlCheck";
 
 type RunInput = {
   instanceId: UUID;
@@ -34,27 +35,59 @@ export async function runChecklist(input: RunInput) {
 
   await ensureInstanceResults(instanceId);
 
-  const inst = await queryOne<any>(
-    `SELECT id, template_version_id FROM checklist_instances WHERE id=$1`,
-    [instanceId]
-  );
+  // Try v2 first, fall back to v1
+  let inst;
+  let items;
+  
+  try {
+    inst = await queryOne<any>(
+      `SELECT id, template_version_id, scope_ref FROM checklist_instances_v2 WHERE id=$1`,
+      [instanceId]
+    );
 
-  const params: any[] = [inst.template_version_id];
-  let where = `WHERE n.version_id=$1 AND n.node_type='check' AND n.check_code IS NOT NULL`;
+    const params: any[] = [inst.template_version_id];
+    let where = `WHERE n.template_version_id=$1 AND n.node_type='item' AND (n.check_kind IS NOT NULL OR n.check_ref IS NOT NULL)`;
 
-  if (mode === "items" && nodeIds && nodeIds.length > 0) {
-    params.push(nodeIds);
-    where += ` AND n.id = ANY($2::uuid[])`;
+    if (mode === "items" && nodeIds && nodeIds.length > 0) {
+      params.push(nodeIds);
+      where += ` AND n.id = ANY($2::uuid[])`;
+    }
+
+    items = await query<any>(
+      `
+      SELECT n.id AS node_id, n.check_kind, n.check_ref, n.severity, 
+             n.sql_template, n.result_mapping, n.pass_fail_rule
+      FROM checklist_nodes_v2 n
+      ${where}
+      `,
+      params
+    );
+  } catch (err: any) {
+    // Log and fallback to v1 schema if v2 doesn't exist
+    console.warn('Falling back to v1 schema:', err.message);
+    
+    inst = await queryOne<any>(
+      `SELECT id, template_version_id FROM checklist_instances WHERE id=$1`,
+      [instanceId]
+    );
+
+    const params: any[] = [inst.template_version_id];
+    let where = `WHERE n.version_id=$1 AND n.node_type='check' AND n.check_code IS NOT NULL`;
+
+    if (mode === "items" && nodeIds && nodeIds.length > 0) {
+      params.push(nodeIds);
+      where += ` AND n.id = ANY($2::uuid[])`;
+    }
+
+    items = await query<any>(
+      `
+      SELECT n.id AS node_id, n.check_code, n.severity
+      FROM checklist_nodes n
+      ${where}
+      `,
+      params
+    );
   }
-
-  const items = await query<any>(
-    `
-    SELECT n.id AS node_id, n.check_code, n.severity
-    FROM checklist_nodes n
-    ${where}
-    `,
-    params
-  );
 
   const targetPool: Pool = createTargetPool(targetDatabaseUrl);
 
@@ -63,7 +96,9 @@ export async function runChecklist(input: RunInput) {
 
     for (const item of items) {
       const start = nowMs();
-      const checkRef = item.check_code as string | null;
+      // Support both v1 (check_code) and v2 (check_kind/check_ref) schemas
+      const checkKind = item.check_kind || 'BUILTIN';
+      const checkRef = item.check_ref || item.check_code as string | null;
       const severity = (item.severity ?? "warning") as string;
 
       let violationsCount = 0;
@@ -72,9 +107,50 @@ export async function runChecklist(input: RunInput) {
       let outputRows: any = null;
       let targetRefs: any[] = [];
 
-      if (!checkRef) continue;
+      if (!checkRef && !item.sql_template) continue;
 
-      if (checkRef === "NO_PRIMARY_KEY") {
+      // Handle SQL_TEMPLATE checks
+      if (checkKind === 'SQL_TEMPLATE' && item.sql_template) {
+        try {
+          // Whitelist and validate scope_ref properties
+          const allowedScopeKeys = ['schema', 'table', 'column', 'schemas', 'tables'];
+          const scopeVars: Record<string, any> = {};
+          
+          if (inst.scope_ref && typeof inst.scope_ref === 'object') {
+            for (const key of allowedScopeKeys) {
+              if (key in inst.scope_ref) {
+                scopeVars[key] = inst.scope_ref[key];
+              }
+            }
+          }
+          
+          const vars = {
+            schema: schemas[0] || '',
+            schemas: schemas,
+            ...scopeVars,
+          };
+          
+          const result = await runSqlCheck(targetPool, {
+            id: item.node_id,
+            sql_template: item.sql_template,
+            result_mapping: item.result_mapping,
+            pass_fail_rule: item.pass_fail_rule,
+            severity: severity,
+          }, vars);
+          
+          violationsCount = result.status === 'pass' ? 0 : 1;
+          outputSummary = `${result.outputStats.rowCount} rows returned`;
+          outputStats = result.outputStats;
+          outputRows = result.outputRows;
+          targetRefs = result.targets;
+        } catch (err: any) {
+          outputSummary = `SQL execution error: ${err.message}`;
+          violationsCount = 1;
+          outputStats = { error: err.message };
+        }
+      }
+      // Handle builtin checks
+      else if (checkRef === "NO_PRIMARY_KEY") {
         const res = await checkNoPrimaryKey(targetPool, schemas);
         violationsCount = res.violations.length;
         outputSummary = `${violationsCount} tables missing primary key`;
@@ -133,35 +209,70 @@ export async function runChecklist(input: RunInput) {
       const status = statusFor(severity, violationsCount);
       const durationMs = nowMs() - start;
 
-      await query(
-        `
-        UPDATE checklist_instance_results r
-        SET
-          status=$3,
-          severity=$4,
-          run_type='automatic',
-          issue_count=$5,
-          pass_count=$6,
-          output=$7,
-          executed_at=now()
-        WHERE r.instance_id=$1 AND r.node_id=$2
-        `,
-        [
-          instanceId,
-          item.node_id,
-          status,
-          severity,
-          violationsCount,
-          violationsCount > 0 ? 0 : 1,
-          {
-            summary: outputSummary,
-            stats: outputStats,
-            rows: outputRows,
-            targets: targetRefs,
+      // Try v2 first, fall back to v1
+      try {
+        await query(
+          `
+          UPDATE checklist_instance_results_v2 r
+          SET
+            status=$3,
+            severity=$4,
+            run_type='automatic',
+            target_ref=$5,
+            output_summary=$6,
+            output_rows=$7,
+            output_stats=$8,
+            ran_at=now(),
+            duration_ms=$9,
+            updated_at=now()
+          WHERE r.instance_id=$1 AND r.node_id=$2
+          `,
+          [
+            instanceId,
+            item.node_id,
+            status,
+            severity,
+            JSON.stringify({ targets: targetRefs }),
+            outputSummary,
+            JSON.stringify(outputRows),
+            JSON.stringify(outputStats),
             durationMs,
-          },
-        ]
-      );
+          ]
+        );
+      } catch (err: any) {
+        // Log and fallback to v1 schema
+        console.warn('Falling back to v1 results schema:', err.message);
+        
+        await query(
+          `
+          UPDATE checklist_instance_results r
+          SET
+            status=$3,
+            severity=$4,
+            run_type='automatic',
+            issue_count=$5,
+            pass_count=$6,
+            output=$7,
+            executed_at=now()
+          WHERE r.instance_id=$1 AND r.node_id=$2
+          `,
+          [
+            instanceId,
+            item.node_id,
+            status,
+            severity,
+            violationsCount,
+            violationsCount > 0 ? 0 : 1,
+            {
+              summary: outputSummary,
+              stats: outputStats,
+              rows: outputRows,
+              targets: targetRefs,
+              durationMs,
+            },
+          ]
+        );
+      }
     }
 
     const rollup = await recomputeInstanceRollup(instanceId);
