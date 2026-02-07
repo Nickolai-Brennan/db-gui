@@ -175,26 +175,75 @@ export async function instancesRoutes(app: FastifyInstance) {
     return { tree };
   });
 
-  // Get issues list
+  // Get issues list with filtering
   app.get("/api/v1/checklist-instances/:instanceId/issues", async (req) => {
     const instanceId = UUIDSchema.parse((req.params as any).instanceId);
+    
+    const Query = z.object({
+      severity: z.string().optional(),
+      status: z.string().optional(),
+      schema: z.string().optional(),
+      nodeId: z.string().uuid().optional(),
+    });
+    const queryParams = Query.parse(req.query);
 
     let rows = [];
     try {
+      const filters: string[] = ['r.instance_id = $1'];
+      const values: any[] = [instanceId];
+      let idx = 2;
+      
+      if (queryParams.severity) {
+        filters.push(`r.severity = ANY($${idx++}::text[])`);
+        values.push(queryParams.severity.split(','));
+      }
+      
+      if (queryParams.status) {
+        filters.push(`r.status = ANY($${idx++}::text[])`);
+        values.push(queryParams.status.split(','));
+      }
+      
+      if (queryParams.schema) {
+        filters.push(`r.target_ref->>'schema' = $${idx++}`);
+        values.push(queryParams.schema);
+      }
+      
+      if (queryParams.nodeId) {
+        filters.push(`r.node_id = $${idx++}`);
+        values.push(queryParams.nodeId);
+      }
+      
       rows = await query<any>(
         `
+        WITH RECURSIVE section_path AS (
+          SELECT id, parent_id, title, ARRAY[title] as path
+          FROM checklist_nodes_v2
+          WHERE template_version_id = (
+            SELECT template_version_id FROM checklist_instances_v2 WHERE id = $1
+          ) AND parent_id IS NULL
+          
+          UNION ALL
+          
+          SELECT n.id, n.parent_id, n.title, sp.path || n.title
+          FROM checklist_nodes_v2 n
+          JOIN section_path sp ON n.parent_id = sp.id
+        )
         SELECT 
           r.id,
           r.severity,
+          r.status,
           n.title,
           n.description,
+          n.check_ref as code,
           n.scope_type as target_kind,
           r.target_ref,
           r.output_summary,
-          r.ran_at
+          r.ran_at,
+          sp.path as section_path
         FROM checklist_instance_results_v2 r
         JOIN checklist_nodes_v2 n ON n.id = r.node_id
-        WHERE r.instance_id = $1
+        LEFT JOIN section_path sp ON n.id = sp.id
+        WHERE ${filters.join(' AND ')}
           AND r.status IN ('warning', 'fail', 'blocked')
         ORDER BY 
           CASE r.severity 
@@ -205,7 +254,7 @@ export async function instancesRoutes(app: FastifyInstance) {
           END,
           r.ran_at DESC
         `,
-        [instanceId]
+        values
       );
     } catch {
       rows = await query<any>(

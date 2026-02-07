@@ -52,6 +52,9 @@ export async function templatesRoutes(app: FastifyInstance) {
     const Body = z.object({
       title: z.string().min(1).optional(),
       description: z.string().optional(),
+      tags: z.any().optional(),
+      defaultScopeType: z.string().optional(),
+      isArchived: z.boolean().optional(),
     });
     const body = Body.parse(req.body);
 
@@ -67,12 +70,26 @@ export async function templatesRoutes(app: FastifyInstance) {
       updates.push(`description = $${idx++}`);
       values.push(body.description);
     }
+    if (body.tags !== undefined) {
+      updates.push(`tags = $${idx++}`);
+      values.push(JSON.stringify(body.tags));
+    }
+    if (body.defaultScopeType !== undefined) {
+      updates.push(`default_scope_type = $${idx++}`);
+      values.push(body.defaultScopeType);
+    }
+    if (body.isArchived !== undefined) {
+      updates.push(`is_archived = $${idx++}`);
+      values.push(body.isArchived);
+    }
 
     if (updates.length === 0) {
       return { template: null };
     }
 
+    updates.push(`updated_at = now()`);
     values.push(templateId);
+    
     const rows = await query<any>(
       `
       UPDATE checklist_templates_v2
@@ -92,17 +109,19 @@ export async function templatesRoutes(app: FastifyInstance) {
 
     const Body = z.object({
       version: z.string().min(1),
+      label: z.string().optional(),
+      notes: z.string().optional(),
       createdBy: z.string().optional(),
     });
     const body = Body.parse(req.body);
 
     const rows = await query<any>(
       `
-      INSERT INTO checklist_template_versions_v2 (template_id, version, status, created_by)
-      VALUES ($1, $2, 'draft', $3)
+      INSERT INTO checklist_template_versions_v2 (template_id, version, label, notes, status, created_by)
+      VALUES ($1, $2, $3, $4, 'draft', $5)
       RETURNING *
       `,
-      [templateId, body.version, body.createdBy || null]
+      [templateId, body.version, body.label || null, body.notes || null, body.createdBy || null]
     );
 
     return { version: rows[0] };
@@ -112,14 +131,19 @@ export async function templatesRoutes(app: FastifyInstance) {
   app.post("/api/v1/checklist-template-versions/:versionId/publish", async (req) => {
     const versionId = UUIDSchema.parse((req.params as any).versionId);
 
+    const Body = z.object({
+      publishedBy: z.string().optional(),
+    });
+    const body = Body.parse(req.body);
+
     const rows = await query<any>(
       `
       UPDATE checklist_template_versions_v2
-      SET status = 'published', published_at = now()
+      SET status = 'published', published_at = now(), published_by = $2
       WHERE id = $1 AND status = 'draft'
       RETURNING *
       `,
-      [versionId]
+      [versionId, body.publishedBy || null]
     );
 
     if (rows.length === 0) {

@@ -1,9 +1,25 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { query } from "../sql";
+import { query, queryOne } from "../sql";
 import { buildTree } from "../checklist/tree";
 
 const UUIDSchema = z.string().uuid();
+
+// Helper function to check if version is mutable
+async function assertVersionMutable(versionId: string) {
+  const result = await query<any>(
+    `SELECT status FROM checklist_template_versions_v2 WHERE id = $1`,
+    [versionId]
+  );
+  
+  if (result.length === 0) {
+    throw new Error('VERSION_NOT_FOUND: Version does not exist');
+  }
+  
+  if (result[0]?.status === 'published') {
+    throw new Error('VERSION_IMMUTABLE: Cannot modify published version');
+  }
+}
 
 export async function nodesRoutes(app: FastifyInstance) {
   // Get nodes tree for a template version
@@ -27,6 +43,9 @@ export async function nodesRoutes(app: FastifyInstance) {
   // Create new node
   app.post("/api/v1/checklist-template-versions/:versionId/nodes", async (req) => {
     const versionId = UUIDSchema.parse((req.params as any).versionId);
+    
+    // Check if version is mutable
+    await assertVersionMutable(versionId);
 
     const Body = z.object({
       parentId: z.string().uuid().optional(),
@@ -95,6 +114,18 @@ export async function nodesRoutes(app: FastifyInstance) {
   // Update node
   app.patch("/api/v1/checklist-nodes/:nodeId", async (req) => {
     const nodeId = UUIDSchema.parse((req.params as any).nodeId);
+
+    // Check version status
+    const versionCheck = await query<any>(
+      `SELECT template_version_id FROM checklist_nodes_v2 WHERE id = $1`,
+      [nodeId]
+    );
+    
+    if (versionCheck.length === 0) {
+      throw new Error('NODE_NOT_FOUND: Node does not exist');
+    }
+    
+    await assertVersionMutable(versionCheck[0].template_version_id);
 
     const Body = z.object({
       title: z.string().min(1).optional(),
@@ -214,6 +245,19 @@ export async function nodesRoutes(app: FastifyInstance) {
   app.delete("/api/v1/checklist-nodes/:nodeId", async (req) => {
     const nodeId = UUIDSchema.parse((req.params as any).nodeId);
 
+    // Check version status
+    const versionCheck = await query<any>(
+      `SELECT template_version_id FROM checklist_nodes_v2 WHERE id = $1`,
+      [nodeId]
+    );
+    
+    if (versionCheck.length === 0) {
+      throw new Error('NODE_NOT_FOUND: Node does not exist');
+    }
+    
+    await assertVersionMutable(versionCheck[0].template_version_id);
+
+    // Cascade delete handled by DB
     await query(
       `
       DELETE FROM checklist_nodes_v2
@@ -228,6 +272,8 @@ export async function nodesRoutes(app: FastifyInstance) {
   // Batch reorder nodes
   app.post("/api/v1/checklist-template-versions/:versionId/nodes/reorder", async (req) => {
     const versionId = UUIDSchema.parse((req.params as any).versionId);
+    
+    await assertVersionMutable(versionId);
 
     const Body = z.object({
       orders: z.array(

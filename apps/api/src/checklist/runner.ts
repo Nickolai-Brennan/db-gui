@@ -9,6 +9,7 @@ import { checkNoPrimaryKey } from "../checks/noPrimaryKey";
 import { checkFkNotIndexed } from "../checks/fkNotIndexed";
 import { getForeignKeys } from "../checks/fkMeta";
 import { checkFkHasViolations } from "../checks/fkHasViolations";
+import { runSqlCheck } from "../sqlrunner/runSqlCheck";
 
 type RunInput = {
   instanceId: UUID;
@@ -34,27 +35,51 @@ export async function runChecklist(input: RunInput) {
 
   await ensureInstanceResults(instanceId);
 
-  const inst = await queryOne<any>(
-    `SELECT id, template_version_id FROM checklist_instances WHERE id=$1`,
-    [instanceId]
-  );
+  // Try v2 first, fallback to v1
+  let inst;
+  try {
+    inst = await queryOne<any>(
+      `SELECT id, template_version_id FROM checklist_instances_v2 WHERE id=$1`,
+      [instanceId]
+    );
+  } catch {
+    inst = await queryOne<any>(
+      `SELECT id, template_version_id FROM checklist_instances WHERE id=$1`,
+      [instanceId]
+    );
+  }
 
   const params: any[] = [inst.template_version_id];
-  let where = `WHERE n.version_id=$1 AND n.node_type='check' AND n.check_code IS NOT NULL`;
+  let where = `WHERE n.template_version_id=$1 AND n.node_type='item'`;
 
   if (mode === "items" && nodeIds && nodeIds.length > 0) {
     params.push(nodeIds);
     where += ` AND n.id = ANY($2::uuid[])`;
   }
 
-  const items = await query<any>(
-    `
-    SELECT n.id AS node_id, n.check_code, n.severity
-    FROM checklist_nodes n
-    ${where}
-    `,
-    params
-  );
+  // Try v2 nodes first, fallback to v1
+  let items;
+  try {
+    items = await query<any>(
+      `
+      SELECT n.id AS node_id, n.check_ref AS check_code, n.check_kind, n.severity, 
+             n.sql_template, n.result_mapping, n.pass_fail_rule
+      FROM checklist_nodes_v2 n
+      ${where}
+      `,
+      params
+    );
+  } catch {
+    // Fallback to v1 structure
+    items = await query<any>(
+      `
+      SELECT n.id AS node_id, n.check_code, n.severity
+      FROM checklist_nodes n
+      WHERE n.version_id=$1 AND n.node_type='check' AND n.check_code IS NOT NULL
+      `,
+      [inst.template_version_id]
+    );
+  }
 
   const targetPool: Pool = createTargetPool(targetDatabaseUrl);
 
@@ -63,6 +88,7 @@ export async function runChecklist(input: RunInput) {
 
     for (const item of items) {
       const start = nowMs();
+      const checkKind = item.check_kind as string | null;
       const checkRef = item.check_code as string | null;
       const severity = (item.severity ?? "warning") as string;
 
@@ -72,6 +98,85 @@ export async function runChecklist(input: RunInput) {
       let outputRows: any = null;
       let targetRefs: any[] = [];
 
+      // Handle SQL-based checks
+      if (checkKind === 'SQL' && item.sql_template) {
+        const result = await runSqlCheck(targetPool, {
+          sql_template: item.sql_template,
+          result_mapping: item.result_mapping,
+          pass_fail_rule: item.pass_fail_rule,
+          severity: severity,
+        }, {
+          schemas: schemas,
+          schema: schemas[0], // default to first schema
+        });
+
+        violationsCount = result.rowCount;
+        outputSummary = result.error || `Found ${result.rowCount} issue(s)`;
+        outputStats = { violationsCount: result.rowCount };
+        outputRows = result.outputRows;
+        targetRefs = result.targets;
+
+        const status = result.status;
+        const durationMs = result.duration;
+
+        // Update result in v2 table
+        try {
+          await query(
+            `
+            UPDATE checklist_instance_results_v2 r
+            SET
+              status=$3,
+              severity=$4,
+              run_type='automatic',
+              output_summary=$5,
+              output_rows=$6,
+              output_stats=$7,
+              target_ref=$8,
+              ran_at=now(),
+              duration_ms=$9
+            WHERE r.instance_id=$1 AND r.node_id=$2
+            `,
+            [
+              instanceId,
+              item.node_id,
+              status,
+              severity,
+              outputSummary,
+              JSON.stringify(outputRows),
+              JSON.stringify(outputStats),
+              JSON.stringify({ targets: targetRefs }),
+              durationMs,
+            ]
+          );
+        } catch {
+          // Fallback to v1 table structure
+          await query(
+            `
+            UPDATE checklist_instance_results r
+            SET
+              status=$3,
+              output=$4,
+              executed_at=now()
+            WHERE r.instance_id=$1 AND r.node_id=$2
+            `,
+            [
+              instanceId,
+              item.node_id,
+              status,
+              {
+                summary: outputSummary,
+                stats: outputStats,
+                rows: outputRows,
+                targets: targetRefs,
+                durationMs,
+              },
+            ]
+          );
+        }
+        continue;
+      }
+
+      // Handle built-in checks (existing logic)
       if (!checkRef) continue;
 
       if (checkRef === "NO_PRIMARY_KEY") {
