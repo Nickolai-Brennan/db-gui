@@ -6,6 +6,7 @@ import { annotationsRoutes } from "./routes/annotations";
 import { templatesRoutes } from "./routes/templates";
 import { nodesRoutes } from "./routes/nodes";
 import { sqlRoutes } from "./routes/sql";
+import { issuesRoutes } from "./routes/issues";
 
 const app = Fastify({  logger: true,
   ajv: {
@@ -74,6 +75,7 @@ await app.register(annotationsRoutes);
 await app.register(templatesRoutes);
 await app.register(nodesRoutes);
 await app.register(sqlRoutes);
+await app.register(issuesRoutes);
 
 const port = Number(process.env.PORT ?? 3001);
 const host = process.env.HOST ?? "0.0.0.0";
