@@ -110,11 +110,22 @@ export async function runChecklist(input: RunInput) {
       // Handle SQL_TEMPLATE checks
       if (checkKind === 'SQL_TEMPLATE' && item.sql_template) {
         try {
+          // Whitelist and validate scope_ref properties
+          const allowedScopeKeys = ['schema', 'table', 'column', 'schemas', 'tables'];
+          const scopeVars: Record<string, any> = {};
+          
+          if (inst.scope_ref && typeof inst.scope_ref === 'object') {
+            for (const key of allowedScopeKeys) {
+              if (key in inst.scope_ref) {
+                scopeVars[key] = inst.scope_ref[key];
+              }
+            }
+          }
+          
           const vars = {
             schema: schemas[0] || '',
             schemas: schemas,
-            // Add other variables from scope_ref if available
-            ...(inst.scope_ref || {}),
+            ...scopeVars,
           };
           
           const result = await runSqlCheck(targetPool, {

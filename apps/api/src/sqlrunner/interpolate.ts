@@ -16,6 +16,16 @@ export function interpolateTemplate(
     if (!(key in vars)) {
       throw new Error(`Missing variable: ${key}`);
     }
-    return String(vars[key]);
+    
+    // Sanitize the value to prevent SQL injection
+    const value = String(vars[key]);
+    
+    // Basic validation: only allow alphanumeric, underscore, and dot
+    // This is safe for identifiers like schema.table
+    if (!/^[a-zA-Z0-9_.\-]+$/.test(value)) {
+      throw new Error(`Invalid characters in variable ${key}: ${value}`);
+    }
+    
+    return value;
   });
 }

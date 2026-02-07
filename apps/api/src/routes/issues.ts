@@ -38,6 +38,7 @@ export async function issuesRoutes(app: FastifyInstance) {
       )
       SELECT
         r.id as result_id,
+        r.node_id,
         r.status,
         r.severity,
         n.title,
@@ -71,6 +72,7 @@ export async function issuesRoutes(app: FastifyInstance) {
     // Filter by schema if provided
     let issues = result.map(row => ({
       resultId: row.result_id,
+      nodeId: row.node_id, // Add node_id for efficient filtering
       severity: row.severity,
       status: row.status,
       code: row.code,
@@ -103,13 +105,10 @@ export async function issuesRoutes(app: FastifyInstance) {
       );
       
       const nodeIds = new Set(descendants.map(d => d.id));
-      issues = issues.filter(issue => {
-        // Find the node_id for this result
-        const resultNode = result.find(r => r.result_id === issue.resultId);
-        return resultNode && nodeIds.has(resultNode.node_id);
-      });
+      issues = issues.filter(issue => nodeIds.has(issue.nodeId));
     }
     
-    return { issues };
+    // Remove nodeId from response
+    return { issues: issues.map(({ nodeId, ...rest }) => rest) };
   });
 }
