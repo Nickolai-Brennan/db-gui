@@ -21,6 +21,41 @@ async function assertVersionMutable(versionId: string) {
   }
 }
 
+// Helper functions
+async function checkVersionMutable(versionId: string): Promise<void> {
+  const result = await query<any>(
+    `
+    SELECT status FROM checklist_template_versions_v2 WHERE id = $1
+    `,
+    [versionId]
+  );
+  
+  if (result[0]?.status === 'published') {
+    throw new Error('VERSION_IMMUTABLE');
+  }
+}
+
+async function checkForCycle(
+  nodeId: string,
+  newParentId: string
+): Promise<boolean> {
+  // Check if newParentId is a descendant of nodeId
+  const result = await query<any>(
+    `
+    WITH RECURSIVE descendants AS (
+      SELECT id FROM checklist_nodes_v2 WHERE id = $1
+      UNION ALL
+      SELECT n.id FROM checklist_nodes_v2 n
+      JOIN descendants d ON n.parent_id = d.id
+    )
+    SELECT 1 FROM descendants WHERE id = $2
+    `,
+    [nodeId, newParentId]
+  );
+  
+  return result.length > 0;
+}
+
 export async function nodesRoutes(app: FastifyInstance) {
   // Get nodes tree for a template version
   app.get("/api/v1/checklist-template-versions/:versionId/nodes/tree", async (req) => {
@@ -46,6 +81,9 @@ export async function nodesRoutes(app: FastifyInstance) {
     
     // Check if version is mutable
     await assertVersionMutable(versionId);
+
+    // Check if version is published
+    await checkVersionMutable(versionId);
 
     const Body = z.object({
       parentId: z.string().uuid().optional(),
@@ -126,6 +164,19 @@ export async function nodesRoutes(app: FastifyInstance) {
     }
     
     await assertVersionMutable(versionCheck[0].template_version_id);
+    // Check version mutability
+    const versionCheck = await query<any>(
+      `
+      SELECT v.status, v.id FROM checklist_template_versions_v2 v
+      JOIN checklist_nodes_v2 n ON v.id = n.template_version_id
+      WHERE n.id = $1
+      `,
+      [nodeId]
+    );
+    
+    if (versionCheck[0]?.status === 'published') {
+      throw new Error('Cannot modify nodes in published version');
+    }
 
     const Body = z.object({
       title: z.string().min(1).optional(),
@@ -275,11 +326,15 @@ export async function nodesRoutes(app: FastifyInstance) {
     
     await assertVersionMutable(versionId);
 
+    // Check version mutability
+    await checkVersionMutable(versionId);
+
     const Body = z.object({
       moves: z.array(
         z.object({
           nodeId: z.string().uuid(),
           newParentId: z.string().uuid().nullable(),
+          newParentId: z.string().uuid().nullable().optional(),
           newSortOrder: z.number().int(),
         })
       ).optional(),
@@ -361,6 +416,56 @@ export async function nodesRoutes(app: FastifyInstance) {
           [move.newSortOrder, move.nodeId, versionId]
         );
       }
+    // Support both 'moves' (with parent changes) and 'orders' (simple reorder)
+    const moves = body.moves || body.orders?.map(o => ({
+      nodeId: o.nodeId,
+      newSortOrder: o.sortOrder,
+      newParentId: undefined,
+    })) || [];
+
+    // Check for cycles if parent is being changed
+    for (const move of moves) {
+      if (move.newParentId !== undefined && move.newParentId !== null) {
+        const wouldCycle = await checkForCycle(
+          move.nodeId,
+          move.newParentId
+        );
+        if (wouldCycle) {
+          throw new Error(`Move would create cycle: ${move.nodeId}`);
+        }
+      }
+    }
+
+    // Apply moves in transaction
+    // TODO: Use client-based transactions for better connection management
+    // Current implementation uses raw BEGIN/COMMIT which works but isn't ideal for connection pooling
+    await query('BEGIN');
+    try {
+      for (const move of moves) {
+        if (move.newParentId !== undefined) {
+          await query(
+            `
+            UPDATE checklist_nodes_v2
+            SET parent_id = $1, sort_order = $2
+            WHERE id = $3 AND template_version_id = $4
+            `,
+            [move.newParentId, move.newSortOrder, move.nodeId, versionId]
+          );
+        } else {
+          await query(
+            `
+            UPDATE checklist_nodes_v2
+            SET sort_order = $1
+            WHERE id = $2 AND template_version_id = $3
+            `,
+            [move.newSortOrder, move.nodeId, versionId]
+          );
+        }
+      }
+      await query('COMMIT');
+    } catch (err) {
+      await query('ROLLBACK');
+      throw err;
     }
 
     return { success: true };

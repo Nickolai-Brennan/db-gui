@@ -15,10 +15,9 @@
     "migrate:down": "node-pg-migrate down -d \"$APP_DATABASE_URL\" -m ../../db/migrations"
   },
   "dependencies": {
-    "@fastify/cors": "^11.2.0",
     "@fastify/sensible": "^6.0.4",
-    "fastify": "^5.7.4",
-    "fastify-plugin": "^5.1.0",
+    "fastify": "^5.7.2",
+    "fastify-plugin": "^4.5.0",
     "node-pg-migrate": "^7.7.0",
     "pg": "^8.11.5",
     "zod": "^3.23.8"
