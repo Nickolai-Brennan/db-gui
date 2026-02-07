@@ -8,21 +8,18 @@ import { nodesRoutes } from "./routes/nodes";
 import { sqlRoutes } from "./routes/sql";
 import { issuesRoutes } from "./routes/issues";
 
-const app = Fastify({  logger: true,
+const app = Fastify({
+  logger: true,
   ajv: {
     customOptions: {
       removeAdditional: false,
       useDefaults: true,
       coerceTypes: "array",
-    }, });
+    },
+  },
+});
 
 await app.register(sensible);
-
-// health check
-app.get('/health', async () => ({ ok: true }));
-
-const port = Number(process.env.API_PORT ?? 4000);
-await app.listen({ port, host: '0.0.0.0' });
 
 // CORS support for local development
 await app.register(import("@fastify/cors"), {
