@@ -62,8 +62,10 @@ export async function runChecklist(input: RunInput) {
       `,
       params
     );
-  } catch {
-    // Fallback to v1 schema
+  } catch (err: any) {
+    // Log and fallback to v1 schema if v2 doesn't exist
+    console.warn('Falling back to v1 schema:', err.message);
+    
     inst = await queryOne<any>(
       `SELECT id, template_version_id FROM checklist_instances WHERE id=$1`,
       [instanceId]
@@ -237,8 +239,10 @@ export async function runChecklist(input: RunInput) {
             durationMs,
           ]
         );
-      } catch {
-        // Fallback to v1 schema
+      } catch (err: any) {
+        // Log and fallback to v1 schema
+        console.warn('Falling back to v1 results schema:', err.message);
+        
         await query(
           `
           UPDATE checklist_instance_results r

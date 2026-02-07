@@ -22,7 +22,8 @@ export function interpolateTemplate(
     
     // Basic validation: only allow alphanumeric, underscore, and dot
     // This is safe for identifiers like schema.table
-    if (!/^[a-zA-Z0-9_.\-]+$/.test(value)) {
+    // Note: PostgreSQL identifiers cannot contain hyphens without quoting
+    if (!/^[a-zA-Z0-9_.]+$/.test(value)) {
       throw new Error(`Invalid characters in variable ${key}: ${value}`);
     }
     

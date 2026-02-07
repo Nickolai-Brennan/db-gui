@@ -322,6 +322,8 @@ export async function nodesRoutes(app: FastifyInstance) {
     }
 
     // Apply moves in transaction
+    // TODO: Use client-based transactions for better connection management
+    // Current implementation uses raw BEGIN/COMMIT which works but isn't ideal for connection pooling
     await query('BEGIN');
     try {
       for (const move of moves) {
