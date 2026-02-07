@@ -137,3 +137,6 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+apps/api/test-sqlrunner.ts
+apps/api/test-cycle-detection.ts
+apps/api/test-api.sh

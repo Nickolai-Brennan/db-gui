@@ -276,25 +276,91 @@ export async function nodesRoutes(app: FastifyInstance) {
     await assertVersionMutable(versionId);
 
     const Body = z.object({
+      moves: z.array(
+        z.object({
+          nodeId: z.string().uuid(),
+          newParentId: z.string().uuid().nullable(),
+          newSortOrder: z.number().int(),
+        })
+      ).optional(),
       orders: z.array(
         z.object({
           nodeId: z.string().uuid(),
           sortOrder: z.number().int(),
         })
-      ),
+      ).optional(),
     });
     const body = Body.parse(req.body);
 
-    // Update each node's sort order
-    for (const { nodeId, sortOrder } of body.orders) {
-      await query(
-        `
-        UPDATE checklist_nodes_v2
-        SET sort_order = $1
-        WHERE id = $2 AND template_version_id = $3
-        `,
-        [sortOrder, nodeId, versionId]
+    // Support both moves (with parent changes) and orders (sort only)
+    const moves = body.moves || (body.orders || []).map(o => ({
+      nodeId: o.nodeId,
+      newParentId: null as string | null,
+      newSortOrder: o.sortOrder,
+    }));
+
+    // Cycle detection: check if any move would create a cycle
+    if (moves.some(m => m.newParentId !== null)) {
+      // Get all nodes to build the tree
+      const allNodes = await query<any>(
+        `SELECT id, parent_id FROM checklist_nodes_v2 WHERE template_version_id = $1`,
+        [versionId]
       );
+
+      // Build parent map with the proposed changes
+      const parentMap = new Map<string, string | null>();
+      for (const node of allNodes) {
+        parentMap.set(node.id, node.parent_id);
+      }
+      
+      // Apply proposed changes
+      for (const move of moves) {
+        if (move.newParentId !== null) {
+          parentMap.set(move.nodeId, move.newParentId);
+        }
+      }
+
+      // Check for cycles
+      const hasCycle = (nodeId: string, visited: Set<string>): boolean => {
+        if (visited.has(nodeId)) return true;
+        visited.add(nodeId);
+        
+        const parentId = parentMap.get(nodeId);
+        if (parentId === null || parentId === undefined) return false;
+        
+        return hasCycle(parentId, visited);
+      };
+
+      for (const move of moves) {
+        if (hasCycle(move.nodeId, new Set())) {
+          throw new Error('CYCLE_DETECTED: Moving node would create a cycle in the tree');
+        }
+      }
+    }
+
+    // Apply all moves
+    for (const move of moves) {
+      if (move.newParentId !== null) {
+        // Update both parent and sort order
+        await query(
+          `
+          UPDATE checklist_nodes_v2
+          SET parent_id = $1, sort_order = $2
+          WHERE id = $3 AND template_version_id = $4
+          `,
+          [move.newParentId, move.newSortOrder, move.nodeId, versionId]
+        );
+      } else {
+        // Update only sort order
+        await query(
+          `
+          UPDATE checklist_nodes_v2
+          SET sort_order = $1
+          WHERE id = $2 AND template_version_id = $3
+          `,
+          [move.newSortOrder, move.nodeId, versionId]
+        );
+      }
     }
 
     return { success: true };
