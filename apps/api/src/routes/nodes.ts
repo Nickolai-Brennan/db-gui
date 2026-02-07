@@ -1,9 +1,25 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { query } from "../sql";
+import { query, queryOne } from "../sql";
 import { buildTree } from "../checklist/tree";
 
 const UUIDSchema = z.string().uuid();
+
+// Helper function to check if version is mutable
+async function assertVersionMutable(versionId: string) {
+  const result = await query<any>(
+    `SELECT status FROM checklist_template_versions_v2 WHERE id = $1`,
+    [versionId]
+  );
+  
+  if (result.length === 0) {
+    throw new Error('VERSION_NOT_FOUND: Version does not exist');
+  }
+  
+  if (result[0]?.status === 'published') {
+    throw new Error('VERSION_IMMUTABLE: Cannot modify published version');
+  }
+}
 
 // Helper functions
 async function checkVersionMutable(versionId: string): Promise<void> {
@@ -62,6 +78,9 @@ export async function nodesRoutes(app: FastifyInstance) {
   // Create new node
   app.post("/api/v1/checklist-template-versions/:versionId/nodes", async (req) => {
     const versionId = UUIDSchema.parse((req.params as any).versionId);
+    
+    // Check if version is mutable
+    await assertVersionMutable(versionId);
 
     // Check if version is published
     await checkVersionMutable(versionId);
@@ -134,6 +153,17 @@ export async function nodesRoutes(app: FastifyInstance) {
   app.patch("/api/v1/checklist-nodes/:nodeId", async (req) => {
     const nodeId = UUIDSchema.parse((req.params as any).nodeId);
 
+    // Check version status
+    const versionCheck = await query<any>(
+      `SELECT template_version_id FROM checklist_nodes_v2 WHERE id = $1`,
+      [nodeId]
+    );
+    
+    if (versionCheck.length === 0) {
+      throw new Error('NODE_NOT_FOUND: Node does not exist');
+    }
+    
+    await assertVersionMutable(versionCheck[0].template_version_id);
     // Check version mutability
     const versionCheck = await query<any>(
       `
@@ -266,6 +296,19 @@ export async function nodesRoutes(app: FastifyInstance) {
   app.delete("/api/v1/checklist-nodes/:nodeId", async (req) => {
     const nodeId = UUIDSchema.parse((req.params as any).nodeId);
 
+    // Check version status
+    const versionCheck = await query<any>(
+      `SELECT template_version_id FROM checklist_nodes_v2 WHERE id = $1`,
+      [nodeId]
+    );
+    
+    if (versionCheck.length === 0) {
+      throw new Error('NODE_NOT_FOUND: Node does not exist');
+    }
+    
+    await assertVersionMutable(versionCheck[0].template_version_id);
+
+    // Cascade delete handled by DB
     await query(
       `
       DELETE FROM checklist_nodes_v2
@@ -280,6 +323,8 @@ export async function nodesRoutes(app: FastifyInstance) {
   // Batch reorder nodes
   app.post("/api/v1/checklist-template-versions/:versionId/nodes/reorder", async (req) => {
     const versionId = UUIDSchema.parse((req.params as any).versionId);
+    
+    await assertVersionMutable(versionId);
 
     // Check version mutability
     await checkVersionMutable(versionId);
@@ -288,6 +333,7 @@ export async function nodesRoutes(app: FastifyInstance) {
       moves: z.array(
         z.object({
           nodeId: z.string().uuid(),
+          newParentId: z.string().uuid().nullable(),
           newParentId: z.string().uuid().nullable().optional(),
           newSortOrder: z.number().int(),
         })
@@ -301,6 +347,75 @@ export async function nodesRoutes(app: FastifyInstance) {
     });
     const body = Body.parse(req.body);
 
+    // Support both moves (with parent changes) and orders (sort only)
+    const moves = body.moves || (body.orders || []).map(o => ({
+      nodeId: o.nodeId,
+      newParentId: null as string | null,
+      newSortOrder: o.sortOrder,
+    }));
+
+    // Cycle detection: check if any move would create a cycle
+    if (moves.some(m => m.newParentId !== null)) {
+      // Get all nodes to build the tree
+      const allNodes = await query<any>(
+        `SELECT id, parent_id FROM checklist_nodes_v2 WHERE template_version_id = $1`,
+        [versionId]
+      );
+
+      // Build parent map with the proposed changes
+      const parentMap = new Map<string, string | null>();
+      for (const node of allNodes) {
+        parentMap.set(node.id, node.parent_id);
+      }
+      
+      // Apply proposed changes
+      for (const move of moves) {
+        if (move.newParentId !== null) {
+          parentMap.set(move.nodeId, move.newParentId);
+        }
+      }
+
+      // Check for cycles
+      const hasCycle = (nodeId: string, visited: Set<string>): boolean => {
+        if (visited.has(nodeId)) return true;
+        visited.add(nodeId);
+        
+        const parentId = parentMap.get(nodeId);
+        if (parentId === null || parentId === undefined) return false;
+        
+        return hasCycle(parentId, visited);
+      };
+
+      for (const move of moves) {
+        if (hasCycle(move.nodeId, new Set())) {
+          throw new Error('CYCLE_DETECTED: Moving node would create a cycle in the tree');
+        }
+      }
+    }
+
+    // Apply all moves
+    for (const move of moves) {
+      if (move.newParentId !== null) {
+        // Update both parent and sort order
+        await query(
+          `
+          UPDATE checklist_nodes_v2
+          SET parent_id = $1, sort_order = $2
+          WHERE id = $3 AND template_version_id = $4
+          `,
+          [move.newParentId, move.newSortOrder, move.nodeId, versionId]
+        );
+      } else {
+        // Update only sort order
+        await query(
+          `
+          UPDATE checklist_nodes_v2
+          SET sort_order = $1
+          WHERE id = $2 AND template_version_id = $3
+          `,
+          [move.newSortOrder, move.nodeId, versionId]
+        );
+      }
     // Support both 'moves' (with parent changes) and 'orders' (simple reorder)
     const moves = body.moves || body.orders?.map(o => ({
       nodeId: o.nodeId,

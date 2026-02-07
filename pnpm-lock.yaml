@@ -39,10 +39,18 @@ importers:
 
   apps/api:
     dependencies:
+      '@fastify/cors':
+        specifier: ^11.2.0
+        version: 11.2.0
       '@fastify/sensible':
         specifier: ^6.0.4
         version: 6.0.4
       fastify:
+        specifier: ^5.7.4
+        version: 5.7.4
+      fastify-plugin:
+        specifier: ^5.1.0
+        version: 5.1.0
         specifier: ^5.7.2
         version: 5.7.2
       fastify-plugin:

@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import sensible from '@fastify/sensible';
+import cors from '@fastify/cors';
 import { introspectRoutes } from "./routes/introspect";
 import { instancesRoutes } from "./routes/instances";
 import { annotationsRoutes } from "./routes/annotations";
@@ -22,7 +23,7 @@ const app = Fastify({
 await app.register(sensible);
 
 // CORS support for local development
-await app.register(import("@fastify/cors"), {
+await app.register(cors, {
   origin: true,
 });
 

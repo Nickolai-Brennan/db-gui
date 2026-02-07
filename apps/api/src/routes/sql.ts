@@ -1,6 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { createTargetPool } from "../targetDb";
+import { validateReadOnly } from "../sqlrunner/readonly";
+import { executeWithLimits } from "../sqlrunner/limits";
+import { suggestMapping } from "../sqlrunner/suggestMapping";
 
 export async function sqlRoutes(app: FastifyInstance) {
   // TODO: Add rate limiting for production use - this endpoint accesses target databases
@@ -10,39 +13,38 @@ export async function sqlRoutes(app: FastifyInstance) {
       sql: z.string().min(1),
       rowCap: z.number().int().default(25),
       timeoutMs: z.number().int().default(2500),
+      variables: z.record(z.any()).optional(),
     });
     const body = Body.parse(req.body);
 
-    // Basic SQL validation to prevent dangerous operations
-    const sqlLower = body.sql.toLowerCase().trim();
-    const dangerousKeywords = ["drop", "delete", "truncate", "alter", "create", "insert", "update"];
-    for (const keyword of dangerousKeywords) {
-      if (sqlLower.includes(keyword)) {
-        return {
-          error: `SQL test endpoint only allows SELECT queries. Detected '${keyword}' keyword.`,
-          rows: [],
-          columns: [],
-        };
-      }
+    try {
+      // Validate read-only
+      validateReadOnly(body.sql);
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : "Unknown error",
+        rows: [],
+        columns: [],
+      };
     }
 
     const pool = createTargetPool(body.targetDatabaseUrl);
 
     try {
-      const result: any = await Promise.race([
-        pool.query(body.sql),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Query timeout exceeded")), body.timeoutMs)
-        ),
-      ]);
+      const { rows, fields, duration } = await executeWithLimits(pool, body.sql, {
+        timeoutMs: body.timeoutMs,
+        rowCap: body.rowCap,
+      });
 
-      const rows = result.rows.slice(0, body.rowCap);
-      const columns = result.fields.map((f: any) => ({ name: f.name, type: f.dataTypeID }));
+      const columns = fields.map((f: any) => ({ name: f.name, type: f.dataTypeID }));
+      const mappingSuggestions = suggestMapping(columns);
 
-      // Suggest mapping based on column names
-      const mappingSuggestions = suggestMappingFromColumns(columns);
-
-      return { rows, columns, mappingSuggestions };
+      return {
+        rows,
+        columns,
+        mappingSuggestions,
+        duration,
+      };
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : "Unknown error",
@@ -53,38 +55,4 @@ export async function sqlRoutes(app: FastifyInstance) {
       await pool.end().catch(() => {});
     }
   });
-}
-
-function suggestMappingFromColumns(columns: { name: string; type: number }[]) {
-  const names = columns.map((c) => c.name.toLowerCase());
-
-  // Check for table target
-  if (names.includes("schema") && names.includes("table")) {
-    return {
-      targetKind: "table",
-      fields: ["schema", "table"],
-    };
-  }
-
-  // Check for column target
-  if (names.includes("schema") && names.includes("table") && names.includes("column")) {
-    return {
-      targetKind: "column",
-      fields: ["schema", "table", "column"],
-    };
-  }
-
-  // Check for relationship target
-  if (
-    names.includes("child_schema") &&
-    names.includes("child_table") &&
-    names.includes("parent_table")
-  ) {
-    return {
-      targetKind: "relationship",
-      fields: ["child_schema", "child_table", "parent_schema", "parent_table"],
-    };
-  }
-
-  return null;
 }

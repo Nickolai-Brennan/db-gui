@@ -35,6 +35,22 @@ export async function runChecklist(input: RunInput) {
 
   await ensureInstanceResults(instanceId);
 
+  // Try v2 first, fallback to v1
+  let inst;
+  try {
+    inst = await queryOne<any>(
+      `SELECT id, template_version_id FROM checklist_instances_v2 WHERE id=$1`,
+      [instanceId]
+    );
+  } catch {
+    inst = await queryOne<any>(
+      `SELECT id, template_version_id FROM checklist_instances WHERE id=$1`,
+      [instanceId]
+    );
+  }
+
+  const params: any[] = [inst.template_version_id];
+  let where = `WHERE n.template_version_id=$1 AND n.node_type='item'`;
   // Try v2 first, fall back to v1
   let inst;
   let items;
@@ -74,6 +90,20 @@ export async function runChecklist(input: RunInput) {
     const params: any[] = [inst.template_version_id];
     let where = `WHERE n.version_id=$1 AND n.node_type='check' AND n.check_code IS NOT NULL`;
 
+  // Try v2 nodes first, fallback to v1
+  let items;
+  try {
+    items = await query<any>(
+      `
+      SELECT n.id AS node_id, n.check_ref AS check_code, n.check_kind, n.severity, 
+             n.sql_template, n.result_mapping, n.pass_fail_rule
+      FROM checklist_nodes_v2 n
+      ${where}
+      `,
+      params
+    );
+  } catch {
+    // Fallback to v1 structure
     if (mode === "items" && nodeIds && nodeIds.length > 0) {
       params.push(nodeIds);
       where += ` AND n.id = ANY($2::uuid[])`;
@@ -83,6 +113,9 @@ export async function runChecklist(input: RunInput) {
       `
       SELECT n.id AS node_id, n.check_code, n.severity
       FROM checklist_nodes n
+      WHERE n.version_id=$1 AND n.node_type='check' AND n.check_code IS NOT NULL
+      `,
+      [inst.template_version_id]
       ${where}
       `,
       params
@@ -96,6 +129,8 @@ export async function runChecklist(input: RunInput) {
 
     for (const item of items) {
       const start = nowMs();
+      const checkKind = item.check_kind as string | null;
+      const checkRef = item.check_code as string | null;
       // Support both v1 (check_code) and v2 (check_kind/check_ref) schemas
       const checkKind = item.check_kind || 'BUILTIN';
       const checkRef = item.check_ref || item.check_code as string | null;
@@ -107,6 +142,86 @@ export async function runChecklist(input: RunInput) {
       let outputRows: any = null;
       let targetRefs: any[] = [];
 
+      // Handle SQL-based checks
+      if (checkKind === 'SQL' && item.sql_template) {
+        const result = await runSqlCheck(targetPool, {
+          sql_template: item.sql_template,
+          result_mapping: item.result_mapping,
+          pass_fail_rule: item.pass_fail_rule,
+          severity: severity,
+        }, {
+          schemas: schemas,
+          schema: schemas[0], // default to first schema
+        });
+
+        violationsCount = result.rowCount;
+        outputSummary = result.error || `Found ${result.rowCount} issue(s)`;
+        outputStats = { violationsCount: result.rowCount };
+        outputRows = result.outputRows;
+        targetRefs = result.targets;
+
+        const status = result.status;
+        const durationMs = result.duration;
+
+        // Update result in v2 table
+        try {
+          await query(
+            `
+            UPDATE checklist_instance_results_v2 r
+            SET
+              status=$3,
+              severity=$4,
+              run_type='automatic',
+              output_summary=$5,
+              output_rows=$6,
+              output_stats=$7,
+              target_ref=$8,
+              ran_at=now(),
+              duration_ms=$9
+            WHERE r.instance_id=$1 AND r.node_id=$2
+            `,
+            [
+              instanceId,
+              item.node_id,
+              status,
+              severity,
+              outputSummary,
+              JSON.stringify(outputRows),
+              JSON.stringify(outputStats),
+              JSON.stringify({ targets: targetRefs }),
+              durationMs,
+            ]
+          );
+        } catch {
+          // Fallback to v1 table structure
+          await query(
+            `
+            UPDATE checklist_instance_results r
+            SET
+              status=$3,
+              output=$4,
+              executed_at=now()
+            WHERE r.instance_id=$1 AND r.node_id=$2
+            `,
+            [
+              instanceId,
+              item.node_id,
+              status,
+              {
+                summary: outputSummary,
+                stats: outputStats,
+                rows: outputRows,
+                targets: targetRefs,
+                durationMs,
+              },
+            ]
+          );
+        }
+        continue;
+      }
+
+      // Handle built-in checks (existing logic)
+      if (!checkRef) continue;
       if (!checkRef && !item.sql_template) continue;
 
       // Handle SQL_TEMPLATE checks
